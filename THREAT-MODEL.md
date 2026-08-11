@@ -1,5 +1,8 @@
 # Threat model
 
+**Review status:** Two-party review completed 2026-08-11. Enforcement claims were checked against
+the implementation and tests; executable PowerShell evidence comes from the qualified host.
+
 ## System in one sentence
 
 A trusted frontier agent seals a bounded task and selected input files, hands them to a local child

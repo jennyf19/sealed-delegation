@@ -1,8 +1,8 @@
-frontier-guided delegation to a local model
-
 <p align="center">
   <img src="assets/sealed-delegation.svg" width="112" alt="Sealed Delegation — a sealed task packet" />
 </p>
+
+<p align="center"><strong>frontier-guided delegation to a local model</strong></p>
 
 # Sealed Delegation
 
