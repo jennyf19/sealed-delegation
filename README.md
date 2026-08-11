@@ -57,6 +57,7 @@ frontier Copilot CLI
 | `docs/WORKSHOP-INTEGRATION.md` | Frontier-desk Local Delegation toggle contract |
 | `THREAT-MODEL.md` | Assets, boundaries, threats, controls, residual risks |
 | `SECURITY.md` | Boundary summary and vulnerability reporting |
+| `CODE_OF_CONDUCT.md` | Contributor Covenant and enforcement expectations |
 
 ## Requirements
 
@@ -134,3 +135,7 @@ tool set, or token budget.
 ## License
 
 [MIT](LICENSE)
+
+## Community
+
+Participation is governed by the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
