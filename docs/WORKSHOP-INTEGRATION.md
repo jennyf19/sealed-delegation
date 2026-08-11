@@ -1,67 +1,65 @@
 # Workshop integration
 
-## Current state
+## Architectural rule
 
-Cairn currently supports two desk launch profiles:
+The frontier desk remains the desk.
 
-- `repo` — suppress ambient plugin MCPs;
-- `connected` — retain configured MCPs.
-
-Those profiles control tool connectivity. They do not select a local model. There is no local-mode
-button in the current Workshop release.
-
-Sealed Delegation ships `tools/start-local-copilot.ps1` as the stable manual launch boundary.
-
-## Proposed Cairn profile
-
-Add a separate `local` profile rather than overloading `repo`:
+Local Delegation is an optional worker lane for eligible subtasks. It is orthogonal to Cairn's
+existing launch profiles:
 
 ```text
-open     -> frontier Copilot, repo MCP profile
-connected -> frontier Copilot, connected MCP profile
-local    -> Sealed Delegation wrapper, local model, read-only tools
+repo / connected        = which MCPs and tools the frontier desk can see
+Local Delegation off/on = whether the frontier desk may invoke a bounded local worker
 ```
 
-The Workshop launcher should invoke:
+The local worker never receives the entire interactive session, owns the user conversation, or
+becomes the authority.
+
+## Current setup
+
+Install the skill on the Workshop host:
 
 ```powershell
-pwsh -NoProfile -File <sealed-delegation>\tools\start-local-copilot.ps1 `
-  -WorkingDirectory <desk-path> `
-  -WorkshopDir <workshop-root> `
-  -Name <desk-name>-local
+copilot skill add C:\path\to\sealed-delegation\.github\skills\local-agent-delegation
 ```
 
-## Configuration contract
+Open desks normally through Cairn. The frontier desk can then invoke the installed skill when a
+task matches the qualified boundary.
 
-Proposed environment variable:
+## Proposed Cairn control
+
+Add a **Local Delegation** toggle to desk launch:
+
+| Toggle | Behavior |
+|---|---|
+| Off | Frontier desk performs all work. |
+| On | Frontier desk may delegate cleared, bounded subtasks through `local-agent-delegation`. |
+
+The toggle must not silently fall back or count savings when:
+
+- the skill is unavailable;
+- preflight has not passed for the configured tuple;
+- the task class is not qualified;
+- the local output fails its independent gate.
+
+## Suggested launch contract
+
+Cairn can expose the operator's intent to the frontier desk with:
 
 ```text
-WORKSHOP_LOCAL_LAUNCHER=C:\path\to\sealed-delegation\tools\start-local-copilot.ps1
+WORKSHOP_LOCAL_DELEGATION=enabled
 ```
 
-Cairn should show the local button only when:
+The desk instruction should say:
 
-- the path is absolute;
-- the file exists;
-- the extension is `.ps1`;
-- the selected platform is Windows.
+> Local Delegation is available for bounded, independently verifiable subtasks. Keep the user
+> conversation, decomposition, judgment, and final answer in the frontier desk. Local output is a
+> proposal and receives no savings credit unless the independent gate accepts it.
 
-The extension must pass each argument through `spawn` argv, never shell concatenation.
+The skill and runtime remain owned by Sealed Delegation. Cairn owns only the toggle, availability
+check, and visible state.
 
-## Preview boundary
+## Not the first version
 
-The first local profile is read-only:
-
-```text
-view,glob
-```
-
-It is suitable for reading journals, extracting facts, and preparing bounded proposals. It is not
-a replacement for a frontier desk and cannot write signals or persistent desk memory.
-
-Write-enabled local desks require a separate qualification.
-
-## Ownership
-
-The wrapper and runtime contract live in Sealed Delegation. The button and launch-profile UI belong
-in The Workshop. Keeping that seam explicit lets each repository version its own responsibility.
+Do not add a `local` desk profile that replaces the frontier model. Whole-session local desks,
+write-enabled workers, and local tool authoring require separate qualification.

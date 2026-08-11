@@ -5,7 +5,7 @@ This walkthrough starts with a clean Windows machine and ends with:
 1. a verified local-model runtime;
 2. the `local-agent-delegation` skill installed;
 3. a synthetic sealed evidence check;
-4. an optional read-only local Workshop desk.
+4. an optional Workshop frontier desk that can delegate eligible subtasks locally.
 
 ## 1. Install the prerequisites
 
@@ -136,31 +136,24 @@ pwsh .\examples\evidence-check\run-demo.ps1
 The sealed example is faster and more stable than a full agentic loop. It demonstrates evidence
 classification and independent gating, not a general model benchmark.
 
-## 10. Optional: open a read-only local Workshop desk
+## 10. Optional: use it from The Workshop
 
-There is not yet a `local` button in Cairn. The existing Workshop `repo` and `connected` profiles
-control MCP availability, not model routing.
+Do not replace a Workshop desk's frontier model with the local model. The qualified architecture
+keeps the frontier desk as the user-facing partner and delegates only bounded subtasks.
 
-Until that integration lands, run:
+Install the skill on the machine that runs the Workshop:
 
 ```powershell
-pwsh .\tools\start-local-copilot.ps1 `
-  -WorkingDirectory C:\workshops\my-workshop\desks\research `
-  -WorkshopDir C:\workshops\my-workshop `
-  -Name research-local
+copilot skill add C:\path\to\sealed-delegation\.github\skills\local-agent-delegation
 ```
 
-This starts an interactive local Copilot session with:
+Open the desk normally with Cairn's `repo` or `connected` profile. Then ask the frontier desk to use
+`local-agent-delegation` for a bounded, independently verifiable subtask.
 
-- Foundry Local and the temporary #874 shim;
-- an isolated persistent Copilot home;
-- only `view` and `glob`;
-- access to the selected desk and Workshop root.
+The current Workshop release has no Local Delegation toggle. The planned toggle changes whether
+the frontier desk may invoke the local worker; it does not change which model owns the desk.
 
-It is intentionally **read-only**. It cannot write journals, signals, or code. Exit Copilot to stop
-the shim.
-
-See [`WORKSHOP-INTEGRATION.md`](WORKSHOP-INTEGRATION.md) for the planned Cairn button contract.
+See [`WORKSHOP-INTEGRATION.md`](WORKSHOP-INTEGRATION.md) for the product contract.
 
 ## What remains manual
 

@@ -18,19 +18,6 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 & node --test (Join-Path $root "tools\foundry-stream-shim.test.mjs")
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-$localDesk = & pwsh -NoProfile -File (Join-Path $root "tools\start-local-copilot.ps1") `
-    -WorkingDirectory $root `
-    -WorkshopDir $root `
-    -Name "sealed-check" `
-    -InitialPrompt "Read-only local launch check." `
-    -DryRun | ConvertFrom-Json
-if ($localDesk.status -ne "DRY_RUN" -or @($localDesk.available_tools) -join "," -ne "view,glob") {
-    throw "Local Workshop launcher drifted outside the read-only profile."
-}
-if (@($localDesk.arguments) -notcontains "-i") {
-    throw "Local Workshop launcher did not preserve the initial prompt argument."
-}
-
 if ($SkipLive) {
     Write-Host "PASS: static sealed-delegation checks"
     exit 0

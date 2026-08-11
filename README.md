@@ -53,7 +53,7 @@ frontier Copilot CLI
 | `run-checks.ps1` | Static checks and optional live validation |
 | `QUALIFICATION.md` | Exact measured boundary and known limits |
 | `docs/TUTORIAL.md` | Step-by-step setup and manual authority boundaries |
-| `docs/WORKSHOP-INTEGRATION.md` | Current manual local desk path and Cairn integration contract |
+| `docs/WORKSHOP-INTEGRATION.md` | Frontier-desk Local Delegation toggle contract |
 | `THREAT-MODEL.md` | Assets, boundaries, threats, controls, residual risks |
 | `SECURITY.md` | Boundary summary and vulnerability reporting |
 
