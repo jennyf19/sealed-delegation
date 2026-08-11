@@ -48,6 +48,7 @@ frontier Copilot CLI
 | `.github/skills/local-agent-delegation/` | Installable skill and isolated launcher |
 | `tools/local-agent-preflight.ps1` | End-to-end staged-file canary |
 | `tools/foundry-stream-shim.mjs` | Temporary repair for Foundry Local #874 |
+| `tools/build-test-package.ps1` | Clean cross-machine test archive with SHA-256 manifest |
 | `examples/evidence-check/` | Synthetic sealed task, gate, and optional agentic variant |
 | `run-checks.ps1` | Static checks and optional live validation |
 | `QUALIFICATION.md` | Exact measured boundary and known limits |
