@@ -22,9 +22,13 @@ $localDesk = & pwsh -NoProfile -File (Join-Path $root "tools\start-local-copilot
     -WorkingDirectory $root `
     -WorkshopDir $root `
     -Name "sealed-check" `
+    -InitialPrompt "Read-only local launch check." `
     -DryRun | ConvertFrom-Json
 if ($localDesk.status -ne "DRY_RUN" -or @($localDesk.available_tools) -join "," -ne "view,glob") {
     throw "Local Workshop launcher drifted outside the read-only profile."
+}
+if (@($localDesk.arguments) -notcontains "-i") {
+    throw "Local Workshop launcher did not preserve the initial prompt argument."
 }
 
 if ($SkipLive) {

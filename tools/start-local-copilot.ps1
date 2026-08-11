@@ -3,6 +3,7 @@ param(
     [string]$WorkingDirectory = (Get-Location).Path,
     [string]$Name = "local-desk",
     [string]$WorkshopDir,
+    [string]$InitialPrompt,
     [string]$Model = "qwen2.5-7b-instruct-generic-gpu",
     [int]$MaxPromptTokens = 16384,
     [switch]$DryRun
@@ -30,6 +31,9 @@ $arguments = @(
 )
 if ($workshop) {
     $arguments += @("--add-dir", $workshop)
+}
+if ($InitialPrompt) {
+    $arguments += @("-i", $InitialPrompt)
 }
 
 if ($DryRun) {
