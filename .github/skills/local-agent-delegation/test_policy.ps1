@@ -22,6 +22,52 @@ try {
     if ($result.model -ne "qwen2.5-7b-instruct-generic-gpu") { throw "default model drifted outside the qualified tuple" }
     if ($result.max_prompt_tokens -ne 16384) { throw "default prompt budget drifted outside the qualified tuple" }
     if ($result.stream -ne "on") { throw "default stream mode drifted outside the qualified tuple" }
+    if (-not $result.route_qualified -or $result.unqualified_route_override) {
+        throw "default route was not qualified by policy"
+    }
+    if ($result.route_id -ne "foundry-qwen25-7b-qualified") {
+        throw "default route id drifted"
+    }
+
+    $failed = $false
+    try {
+        & $script `
+            -Task "read fixture" `
+            -WorkingDirectory $temporary `
+            -Model "unapproved-model" `
+            -FoundryAlias "unapproved-model" `
+            -RunRoot $runRoot `
+            -DryRun 2>$null | Out-Null
+    } catch {
+        $failed = $_.Exception.Message -match "Route is not approved"
+    }
+    if (-not $failed) { throw "unapproved model was not rejected" }
+
+    $failed = $false
+    try {
+        & $script `
+            -Task "read fixture" `
+            -WorkingDirectory $temporary `
+            -RuntimeId "lm-studio" `
+            -RunRoot $runRoot `
+            -DryRun 2>$null | Out-Null
+    } catch {
+        $failed = $_.Exception.Message -match "Route is not approved"
+    }
+    if (-not $failed) { throw "unapproved runtime was not rejected" }
+
+    $override = & $script `
+        -Task "read fixture" `
+        -WorkingDirectory $temporary `
+        -RuntimeId "lm-studio" `
+        -Model "unapproved-model" `
+        -FoundryAlias "unapproved-model" `
+        -AllowUnqualifiedRoute `
+        -RunRoot $runRoot `
+        -DryRun | ConvertFrom-Json
+    if ($override.route_qualified -or -not $override.unqualified_route_override) {
+        throw "unqualified route override was not recorded"
+    }
 
     $failed = $false
     try {

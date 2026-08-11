@@ -73,6 +73,7 @@ This checks:
 - launcher policy;
 - loopback refusal;
 - task-secret screening;
+- approved runtime/model route enforcement;
 - staged-input behavior;
 - runtime port rediscovery;
 - stream-shim repair and de-duplication.
@@ -168,3 +169,18 @@ Humans must:
 - decide whether output advances real work.
 
 Those are authority boundaries, not missing automation.
+
+## Using another local runtime
+
+LM Studio, Ollama, and other loopback servers are not approved by default. Merely starting one does
+not change Sealed Delegation's route.
+
+To research another runtime:
+
+1. add a candidate route only after license, provenance, runtime, model id, context, tools, and gate
+   behavior are reviewed;
+2. run preflight and the frozen acceptance task;
+3. add it to `approved-routes.json` only after qualification.
+
+`-AllowUnqualifiedRoute` exists for isolated experiments. It is intentionally loud and recorded in
+receipts; do not use it for normal Workshop tasks or claim that the route is qualified.

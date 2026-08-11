@@ -1,0 +1,18 @@
+{
+  "schema_version": "sealed-delegation/approved-routes/v1",
+  "policy_id": "limited-preview",
+  "routes": [
+    {
+      "id": "foundry-qwen25-7b-qualified",
+      "runtime": "foundry-local",
+      "model": "qwen2.5-7b-instruct-generic-gpu",
+      "stream": "on",
+      "max_prompt_tokens": 16384,
+      "profiles": [
+        "read",
+        "sealed"
+      ],
+      "status": "qualified"
+    }
+  ]
+}

@@ -7,6 +7,7 @@
 [CmdletBinding()]
 param(
     [string]$BaseUrl = $env:LOCAL_MODEL_BASE_URL,
+    [string]$RuntimeId = $(if ($env:LOCAL_MODEL_RUNTIME) { $env:LOCAL_MODEL_RUNTIME } else { "foundry-local" }),
     [string]$Model = $(if ($env:LOCAL_MODEL) { $env:LOCAL_MODEL } else { "qwen2.5-7b-instruct-generic-gpu" }),
     [string]$FoundryAlias = $env:LOCAL_MODEL_FOUNDRY_ALIAS,
     [ValidateSet("on", "off")]
@@ -15,6 +16,8 @@ param(
     [int]$MaxOutputTokens = 64,
     [int]$TimeoutSeconds = 600,
     [string]$RunRoot = $(Join-Path $HOME ".copilot\local-agent-preflight-runs"),
+    [string]$RoutePolicyPath,
+    [switch]$AllowUnqualifiedRoute,
     [switch]$StartFoundryShim,
     [int]$ShimPort = 0
 )
@@ -24,6 +27,22 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 . (Join-Path $PSScriptRoot "foundry-shim-lib.ps1")
 $FoundryAlias = if ($FoundryAlias) { $FoundryAlias } else { $Model }
 $launcher = Join-Path $repoRoot ".github\skills\local-agent-delegation\scripts\invoke_local_agent.ps1"
+$routePolicyHelper = Join-Path $repoRoot ".github\skills\local-agent-delegation\scripts\route_policy.ps1"
+. $routePolicyHelper
+$RoutePolicyPath = if ($RoutePolicyPath) {
+    $RoutePolicyPath
+} else {
+    Join-Path $repoRoot ".github\skills\local-agent-delegation\references\approved-routes.json"
+}
+$policyStream = if ($StartFoundryShim) { "on" } else { $Stream }
+$null = Get-SealedDelegationRouteDecision `
+    -PolicyPath $RoutePolicyPath `
+    -RuntimeId $RuntimeId `
+    -Model $Model `
+    -Stream $policyStream `
+    -MaxPromptTokens $MaxPromptTokens `
+    -Profile "read" `
+    -AllowUnqualifiedRoute:$AllowUnqualifiedRoute
 $fixtureRoot = Join-Path $env:TEMP ("sealed-delegation-preflight-" + [guid]::NewGuid().ToString("N"))
 $fixture = Join-Path $fixtureRoot "canary.txt"
 $nonce = [guid]::NewGuid().ToString("N")
@@ -37,6 +56,9 @@ try {
     New-Item -ItemType Directory -Force $RunRoot | Out-Null
 
     if ($StartFoundryShim) {
+        if ($RuntimeId -ne "foundry-local") {
+            throw "-StartFoundryShim requires RuntimeId foundry-local."
+        }
         if ($BaseUrl) {
             throw "-StartFoundryShim discovers Foundry Local dynamically; do not also pass -BaseUrl."
         }
@@ -57,6 +79,7 @@ try {
         Profile = "read"
         InputPaths = @($fixture)
         TaskMode = "prepare"
+        RuntimeId = $RuntimeId
         Model = $Model
         FoundryAlias = $FoundryAlias
         MaxPromptTokens = $MaxPromptTokens
@@ -64,6 +87,8 @@ try {
         Stream = $Stream
         TimeoutSeconds = $TimeoutSeconds
         RunRoot = $RunRoot
+        RoutePolicyPath = $RoutePolicyPath
+        AllowUnqualifiedRoute = $AllowUnqualifiedRoute
     }
     if ($BaseUrl) {
         $invoke.BaseUrl = $BaseUrl

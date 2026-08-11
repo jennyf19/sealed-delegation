@@ -25,8 +25,10 @@ param(
     [switch]$AllowRemoteEndpoint,
     [switch]$AllowCredentialEnvironment,
     [switch]$AllowPotentialSecrets,
+    [switch]$AllowUnqualifiedRoute,
 
     [string]$BaseUrl = $env:LOCAL_MODEL_BASE_URL,
+    [string]$RuntimeId = $(if ($env:LOCAL_MODEL_RUNTIME) { $env:LOCAL_MODEL_RUNTIME } else { "foundry-local" }),
     [string]$Model = $(if ($env:LOCAL_MODEL) { $env:LOCAL_MODEL } else { "qwen2.5-7b-instruct-generic-gpu" }),
     [string]$FoundryAlias = $(if ($env:LOCAL_MODEL_FOUNDRY_ALIAS) { $env:LOCAL_MODEL_FOUNDRY_ALIAS } else { "qwen2.5-7b-instruct-generic-gpu" }),
     [int]$MaxPromptTokens = 16384,
@@ -35,11 +37,13 @@ param(
     [string]$Stream = "on",
     [int]$TimeoutSeconds = 900,
     [string]$RunRoot = $(Join-Path $HOME ".copilot\local-agent-runs"),
+    [string]$RoutePolicyPath = $(Join-Path $PSScriptRoot "..\references\approved-routes.json"),
     [switch]$DryRun
 )
 
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "output_policy.ps1")
+. (Join-Path $PSScriptRoot "route_policy.ps1")
 
 $partnershipPreamble = (Get-Content (Join-Path $PSScriptRoot "..\references\partnership-preamble.txt") -Raw).Trim()
 $taskModeInstruction = switch ($TaskMode) {
@@ -193,6 +197,15 @@ if ($LASTEXITCODE -eq 0 -and ($AllowWrites -or $AllowShell)) {
     }
 }
 
+$routeDecision = Get-SealedDelegationRouteDecision `
+    -PolicyPath $RoutePolicyPath `
+    -RuntimeId $RuntimeId `
+    -Model $Model `
+    -Stream $Stream `
+    -MaxPromptTokens $MaxPromptTokens `
+    -Profile $Profile `
+    -AllowUnqualifiedRoute:$AllowUnqualifiedRoute
+
 if (-not $BaseUrl) {
     if ($Stream -eq "on" -and -not $DryRun) {
         throw "The qualified streaming route requires an explicit loopback -BaseUrl, such as the temporary Foundry stream shim. Run tools\local-agent-preflight.ps1 -StartFoundryShim first."
@@ -335,6 +348,7 @@ $metadata = [ordered]@{
     tools = @($selectedTools)
     protected_branches = @($ProtectedBranches)
     provider_base_url = $api
+    runtime = $RuntimeId
     model = $Model
     max_prompt_tokens = $MaxPromptTokens
     max_output_tokens = $MaxOutputTokens
@@ -352,6 +366,12 @@ $metadata = [ordered]@{
     effective_task_sha256 = $effectiveTaskHash
     credential_environment_inherited = [bool]$AllowCredentialEnvironment
     environment_mode = $(if ($AllowCredentialEnvironment) { "inherited" } else { "minimal-isolated-home" })
+    route_policy_path = $routeDecision.policy_path
+    route_policy_sha256 = $routeDecision.policy_sha256
+    route_policy_id = $routeDecision.policy_id
+    route_id = $routeDecision.route_id
+    route_qualified = $routeDecision.qualified
+    unqualified_route_override = $routeDecision.override_used
 }
 
 if ($DryRun) {

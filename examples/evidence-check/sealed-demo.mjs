@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+import { evaluateRoute } from "../../tools/route-policy.mjs";
+
 const args = process.argv.slice(2);
 const flag = (name) => {
   const index = args.indexOf(name);
@@ -13,9 +15,23 @@ const model = flag("--model");
 const sourcePath = resolve(flag("--source") || "");
 const outPath = resolve(flag("--out") || "sealed-result.json");
 const timeoutSeconds = Number(flag("--timeout-seconds") || 300);
-if (!baseUrl || !model || !sourcePath) {
-  throw new Error("--base-url, --model, and --source are required.");
+const runtime = flag("--runtime") || "foundry-local";
+const policyPath = resolve(flag("--policy") || "");
+const maxPromptTokens = Number(flag("--max-prompt-tokens") || 16384);
+const allowUnqualified = args.includes("--allow-unqualified-route");
+if (!baseUrl || !model || !sourcePath || !policyPath) {
+  throw new Error("--base-url, --model, --source, and --policy are required.");
 }
+
+const route = evaluateRoute({
+  policyPath,
+  runtime,
+  model,
+  stream: "on",
+  maxPromptTokens,
+  profile: "sealed",
+  allowUnqualified,
+});
 
 const expected = {
   status: "blocked",
@@ -100,6 +116,7 @@ const receipt = {
   schema_version: "sealed-delegation/sealed-evidence-check/v1",
   completed_at: new Date().toISOString(),
   route: "sealed-direct-no-tools",
+  route_policy: route,
   model,
   base_url: baseUrl,
   source_sha256: sha256(source),

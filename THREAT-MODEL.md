@@ -52,6 +52,7 @@ whose output is always untrusted, and accepts nothing until an independent gate 
 | T9 | Receipt tampering | Chained task, input, stdout, and stderr hashes | Launcher | Receipts are unsigned and assume host integrity |
 | T10 | Secret pasted into task text | Pre-launch secret-pattern screen; explicit high-risk override | Launcher and policy test | Pattern matching cannot detect every secret |
 | T11 | Hung or looping child | Hard timeout and process-tree termination | Launcher | Long but progressing runs can still be expensive in wall time |
+| T12 | Unapproved or policy-banned model is selected | Fail-closed exact runtime/model/profile/budget allowlist; explicit override recorded as unqualified | Route policy in launcher, preflight, and sealed demo; PowerShell and Node tests | Runtime/model labels are configuration claims, not cryptographic attestation of weights |
 
 ## Explicit non-goals
 
@@ -73,6 +74,7 @@ whose output is always untrusted, and accepts nothing until an independent gate 
 | Launcher non-loopback refusal | `test_policy.ps1` |
 | Shim non-loopback refusal | `foundry-stream-shim.test.mjs` |
 | Secret-pattern refusal | `test_policy.ps1` |
+| Approved-route enforcement | `test_policy.ps1` and `route-policy.test.mjs` |
 | Shim repair and de-duplication | `foundry-stream-shim.test.mjs` |
 
 ## Review rule

@@ -46,6 +46,7 @@ frontier Copilot CLI
 | Path | Purpose |
 |---|---|
 | `.github/skills/local-agent-delegation/` | Installable skill and isolated launcher |
+| `.github/skills/local-agent-delegation/references/approved-routes.json` | Fail-closed approved runtime/model tuples |
 | `tools/local-agent-preflight.ps1` | End-to-end staged-file canary |
 | `tools/foundry-stream-shim.mjs` | Temporary repair for Foundry Local #874 |
 | `tools/build-test-package.ps1` | Clean cross-machine test archive with SHA-256 manifest |
@@ -108,6 +109,16 @@ wiring. Neither is a general semantic benchmark.
 Use local only when the task is bounded, the evidence is explicit, and the result has a cheap
 independent check. Local output is a proposal. Never treat process exit zero, confidence, or fluent
 prose as authority.
+
+## Model governance
+
+Sealed Delegation uses an allowlist, not a blocklist. Only exact routes in
+`approved-routes.json` run as qualified by default. Starting LM Studio, Ollama, or another local
+server does not make it available to this system automatically.
+
+An unlisted runtime, model, profile, stream mode, or prompt budget fails before model loading or
+inference. `-AllowUnqualifiedRoute` is a loud research override; receipts record that the route was
+unqualified and it must not inherit qualified claims.
 
 ## Status
 

@@ -12,6 +12,7 @@ The following precise ARM64 route has cross-machine evidence:
 - `view` as the only child tool
 - 16,384 prompt-token budget
 - bounded staged-file read followed by an exact independent gate
+- route id `foundry-qwen25-7b-qualified` in the approved-route policy
 
 ARM64 cross-machine receipts:
 
@@ -42,6 +43,7 @@ work. Do not treat this claim as independently reproducible from the current pac
 - large-context synthesis;
 - final security, compliance, merge, or deployment decisions;
 - arbitrary models, runtimes, tool sets, or prompt budgets;
+- LM Studio, Ollama, or any other route not explicitly listed in `approved-routes.json`;
 - claims of dollar savings.
 
 ## Measurement rule

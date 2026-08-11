@@ -13,6 +13,8 @@ The complete design analysis is in [`THREAT-MODEL.md`](THREAT-MODEL.md).
 - Local output cannot authorize a consequential decision without an independent gate.
 - Task text is persisted in receipts; potential secret patterns are rejected before launch unless
   the caller uses the explicit high-risk override.
+- Runtime/model routes are denied unless the complete tuple appears in the approved-route policy.
+  The unqualified-route override is for isolated research and removes qualified status.
 - The temporary shim is unauthenticated on loopback. Start it only for the bounded run and stop it
   immediately afterward.
 

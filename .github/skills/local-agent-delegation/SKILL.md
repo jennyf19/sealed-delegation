@@ -70,6 +70,16 @@ The caller must verify receipts, inspect artifacts directly, and run an independ
 `evidence-check` may propose a missing-input `BLOCK`; accept it only after confirming that the
 named input is absent from the supplied evidence.
 
+## Route governance
+
+The launcher loads `references/approved-routes.json` and rejects every runtime/model/profile/budget
+tuple not explicitly qualified there. This is stronger than a banned-model list: unknown routes
+fail closed.
+
+Do not point the launcher at LM Studio, Ollama, or another local server and assume locality makes
+the route approved. A new route requires independent qualification. The
+`-AllowUnqualifiedRoute` switch is a high-risk research override and is recorded in the receipt.
+
 ## Runtime boundary
 
 Before first use, or after changing the model, runtime, stream mode, or Copilot CLI version, run:
