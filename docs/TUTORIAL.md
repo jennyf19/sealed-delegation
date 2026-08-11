@@ -175,6 +175,10 @@ Those are authority boundaries, not missing automation.
 LM Studio, Ollama, and other loopback servers are not approved by default. Merely starting one does
 not change Sealed Delegation's route.
 
+Before evaluating any alternate model, separately confirm that your organization permits the
+runtime, model, account, device, data classification, and intended use. Sealed Delegation's policy
+records technical evidence only; it cannot grant corporate or legal approval.
+
 To research another runtime:
 
 1. add a candidate route only after license, provenance, runtime, model id, context, tools, and gate

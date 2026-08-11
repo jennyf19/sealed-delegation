@@ -47,6 +47,7 @@ function Get-SealedDelegationRouteDecision {
         policy_path = $resolvedPolicy
         policy_sha256 = (Get-FileHash -LiteralPath $resolvedPolicy -Algorithm SHA256).Hash.ToLowerInvariant()
         policy_id = $policy.policy_id
+        approval_scope = $policy.approval_scope
         route_id = $(if ($qualified) { $route.id } else { $null })
         qualified = $qualified
         override_used = -not $qualified

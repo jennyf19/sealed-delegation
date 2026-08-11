@@ -1,6 +1,7 @@
 {
   "schema_version": "sealed-delegation/approved-routes/v1",
   "policy_id": "limited-preview",
+  "approval_scope": "sealed-delegation-technical-qualification",
   "routes": [
     {
       "id": "foundry-qwen25-7b-qualified",

@@ -26,6 +26,7 @@ test("accepts the qualified sealed route", () => {
   });
   assert.equal(result.qualified, true);
   assert.equal(result.route_id, "foundry-qwen25-7b-qualified");
+  assert.equal(result.approval_scope, "sealed-delegation-technical-qualification");
   assert.equal(result.override_used, false);
 });
 

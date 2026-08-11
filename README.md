@@ -120,6 +120,11 @@ An unlisted runtime, model, profile, stream mode, or prompt budget fails before 
 inference. `-AllowUnqualifiedRoute` is a loud research override; receipts record that the route was
 unqualified and it must not inherit qualified claims.
 
+This is a **technical qualification allowlist**, not an employer, legal, privacy, export-control,
+or procurement approval. Organizations may independently prohibit a runtime, model, account,
+device, data class, or use case. Follow those policies even when a route is technically qualified
+here.
+
 ## Status
 
 Private research preview. The qualified route is intentionally narrow; see

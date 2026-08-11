@@ -15,6 +15,8 @@ The complete design analysis is in [`THREAT-MODEL.md`](THREAT-MODEL.md).
   the caller uses the explicit high-risk override.
 - Runtime/model routes are denied unless the complete tuple appears in the approved-route policy.
   The unqualified-route override is for isolated research and removes qualified status.
+- Project route qualification is not organizational approval. Corporate tool, model, identity,
+  device, sensitive-data, legal, and procurement policies remain independently binding.
 - The temporary shim is unauthenticated on loopback. Start it only for the bounded run and stop it
   immediately afterward.
 

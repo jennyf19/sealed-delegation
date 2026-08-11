@@ -38,6 +38,7 @@ export function evaluateRoute({
     policy_path: resolvedPolicy,
     policy_sha256: createHash("sha256").update(raw).digest("hex"),
     policy_id: policy.policy_id,
+    approval_scope: policy.approval_scope,
     route_id: route?.id ?? null,
     qualified,
     override_used: !qualified,
