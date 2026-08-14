@@ -388,6 +388,7 @@ $startInfo.UseShellExecute = $false
 $startInfo.RedirectStandardOutput = $true
 $startInfo.RedirectStandardError = $true
 $startInfo.CreateNoWindow = $true
+$childEnvironmentRoot = $null
 if (-not $AllowCredentialEnvironment) {
     $safeKeys = @(
         "SystemRoot",
@@ -429,33 +430,37 @@ if (-not $AllowCredentialEnvironment) {
             $null = $startInfo.Environment.Remove($key)
         }
     }
-    $childHome = New-Item -ItemType Directory -Force (Join-Path $runDirectory "home")
-    $childTemp = New-Item -ItemType Directory -Force (Join-Path $runDirectory "temp")
-    $childAppData = New-Item -ItemType Directory -Force (Join-Path $childHome "AppData\Roaming")
-    $childLocalAppData = New-Item -ItemType Directory -Force (Join-Path $childHome "AppData\Local")
-    $azureConfig = New-Item -ItemType Directory -Force (Join-Path $childHome ".azure")
-    $emptyGitConfig = Join-Path $childHome ".gitconfig"
-    "" | Set-Content $emptyGitConfig -Encoding utf8
-    $homeRoot = [System.IO.Path]::GetPathRoot($childHome.FullName).TrimEnd("\")
-    $homePath = $childHome.FullName.Substring($homeRoot.Length)
-    if (-not $homePath.StartsWith("\")) { $homePath = "\$homePath" }
-    $startInfo.Environment["HOME"] = $childHome.FullName
-    $startInfo.Environment["USERPROFILE"] = $childHome.FullName
-    $startInfo.Environment["HOMEDRIVE"] = $homeRoot
-    $startInfo.Environment["HOMEPATH"] = $homePath
-    $startInfo.Environment["APPDATA"] = $childAppData.FullName
-    $startInfo.Environment["LOCALAPPDATA"] = $childLocalAppData.FullName
-    $startInfo.Environment["TEMP"] = $childTemp.FullName
-    $startInfo.Environment["TMP"] = $childTemp.FullName
-    $startInfo.Environment["AZURE_CONFIG_DIR"] = $azureConfig.FullName
-    $startInfo.Environment["GIT_CONFIG_NOSYSTEM"] = "1"
-    $startInfo.Environment["GIT_CONFIG_GLOBAL"] = $emptyGitConfig
-    $startInfo.Environment["GIT_TERMINAL_PROMPT"] = "0"
-    $startInfo.Environment["GCM_INTERACTIVE"] = "Never"
-    $startInfo.Environment["GIT_CONFIG_COUNT"] = "1"
-    $startInfo.Environment["GIT_CONFIG_KEY_0"] = "credential.helper"
-    $startInfo.Environment["GIT_CONFIG_VALUE_0"] = ""
-}
+        # Keep Copilot's nested SQLite and package paths below the Windows path-length limit.
+        $childEnvironmentRoot = New-Item -ItemType Directory -Force (
+            Join-Path ([System.IO.Path]::GetTempPath()) "copilot-local-agent-$runId"
+        )
+        $childHome = New-Item -ItemType Directory -Force (Join-Path $childEnvironmentRoot "home")
+        $childTemp = New-Item -ItemType Directory -Force (Join-Path $childEnvironmentRoot "temp")
+        $childAppData = New-Item -ItemType Directory -Force (Join-Path $childHome "AppData\Roaming")
+        $childLocalAppData = New-Item -ItemType Directory -Force (Join-Path $childHome "AppData\Local")
+        $azureConfig = New-Item -ItemType Directory -Force (Join-Path $childHome ".azure")
+        $emptyGitConfig = Join-Path $childHome ".gitconfig"
+        "" | Set-Content $emptyGitConfig -Encoding utf8
+        $homeRoot = [System.IO.Path]::GetPathRoot($childHome.FullName).TrimEnd("\")
+        $homePath = $childHome.FullName.Substring($homeRoot.Length)
+        if (-not $homePath.StartsWith("\")) { $homePath = "\$homePath" }
+        $startInfo.Environment["HOME"] = $childHome.FullName
+        $startInfo.Environment["USERPROFILE"] = $childHome.FullName
+        $startInfo.Environment["HOMEDRIVE"] = $homeRoot
+        $startInfo.Environment["HOMEPATH"] = $homePath
+        $startInfo.Environment["APPDATA"] = $childAppData.FullName
+        $startInfo.Environment["LOCALAPPDATA"] = $childLocalAppData.FullName
+        $startInfo.Environment["TEMP"] = $childTemp.FullName
+        $startInfo.Environment["TMP"] = $childTemp.FullName
+        $startInfo.Environment["AZURE_CONFIG_DIR"] = $azureConfig.FullName
+        $startInfo.Environment["GIT_CONFIG_NOSYSTEM"] = "1"
+        $startInfo.Environment["GIT_CONFIG_GLOBAL"] = $emptyGitConfig
+        $startInfo.Environment["GIT_TERMINAL_PROMPT"] = "0"
+        $startInfo.Environment["GCM_INTERACTIVE"] = "Never"
+        $startInfo.Environment["GIT_CONFIG_COUNT"] = "1"
+        $startInfo.Environment["GIT_CONFIG_KEY_0"] = "credential.helper"
+        $startInfo.Environment["GIT_CONFIG_VALUE_0"] = ""
+    }
 $providerKeys = @(
     "COPILOT_PROVIDER_BEARER_TOKEN",
     "COPILOT_PROVIDER_HEADERS",
@@ -491,18 +496,24 @@ foreach ($argument in $arguments) {
 $process = [System.Diagnostics.Process]::new()
 $process.StartInfo = $startInfo
 $started = Get-Date
-$null = $process.Start()
-$stdoutTask = $process.StandardOutput.ReadToEndAsync()
-$stderrTask = $process.StandardError.ReadToEndAsync()
-$completed = $process.WaitForExit($TimeoutSeconds * 1000)
-if (-not $completed) {
-    $process.Kill($true)
-    $process.WaitForExit()
+try {
+    $null = $process.Start()
+    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
+    $completed = $process.WaitForExit($TimeoutSeconds * 1000)
+    if (-not $completed) {
+        $process.Kill($true)
+        $process.WaitForExit()
+    }
+    $stdout = $stdoutTask.GetAwaiter().GetResult()
+    $stderr = $stderrTask.GetAwaiter().GetResult()
+    $stdout | Set-Content $stdoutPath -Encoding utf8
+    $stderr | Set-Content $stderrPath -Encoding utf8
+} finally {
+    if ($childEnvironmentRoot -and (Test-Path -LiteralPath $childEnvironmentRoot)) {
+        Remove-Item -LiteralPath $childEnvironmentRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
-$stdout = $stdoutTask.GetAwaiter().GetResult()
-$stderr = $stderrTask.GetAwaiter().GetResult()
-$stdout | Set-Content $stdoutPath -Encoding utf8
-$stderr | Set-Content $stderrPath -Encoding utf8
 
 $metadata.finished_at = (Get-Date).ToUniversalTime().ToString("o")
 $metadata.elapsed_seconds = [math]::Round(((Get-Date) - $started).TotalSeconds, 3)

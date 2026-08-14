@@ -19,6 +19,8 @@ The complete design analysis is in [`THREAT-MODEL.md`](THREAT-MODEL.md).
   device, sensitive-data, legal, and procurement policies remain independently binding.
 - The temporary shim is unauthenticated on loopback. Start it only for the bounded run and stop it
   immediately afterward.
+- The ephemeral child home is removed after the child exits. Durable receipts retain only the
+  selected task, staged-input metadata, stdout, stderr, and hashes.
 
 ## Reporting a vulnerability
 

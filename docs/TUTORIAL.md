@@ -1,25 +1,59 @@
-# Tutorial: set up and use Sealed Delegation
+# Tutorial: one sealed evidence check end to end
 
-This walkthrough starts with a clean Windows machine and ends with:
+This is a learning walkthrough, not only an install checklist.
 
-1. a verified local-model runtime;
-2. the `local-agent-delegation` skill installed;
-3. a synthetic sealed evidence check;
-4. an optional Workshop frontier desk that can delegate eligible subtasks locally.
+You will carry **one scenario** from a clean Windows machine through a successful run:
 
-## 1. Install the prerequisites
+> Give a local model a synthetic release-evidence file and ask whether rollback evidence is joined
+> for the predeclared release windows. The local child may read only that sealed file. A separate
+> gate verifies the answer. Copilot keeps the final decision.
+
+By the end you will know:
+
+1. what you install once;
+2. what you delegate;
+3. what the local agent returns;
+4. what Copilot (or the gate) verifies before anything is trusted.
+
+## The scenario in one picture
+
+```text
+You / Copilot
+  decide the job: "is rollback evidence joined?"
+  choose the only allowed file: fixture.md
+        |
+        v
+Local Copilot child
+  reads the sealed file
+  returns a structured proposal
+        |
+        v
+Independent gate
+  re-checks the sealed file hash
+  compares the proposal to the expected answer
+  records kept / edited / rejected / escalated
+        |
+        v
+You / Copilot
+  keep authority over any real decision
+```
+
+In the shipped synthetic example, the honest answer is **blocked**: the fixture does not contain
+joined runtime and rollback evidence for the predeclared 30-day windows.
+
+## 1. Install the prerequisites once
 
 Install these yourself before asking an agent to run the project:
 
 - **PowerShell 7**
 - **Node.js 20 or newer**
-- **GitHub Copilot CLI 1.0.79**
+- **GitHub Copilot CLI 1.0.79 or 1.0.80**
 - **Foundry Local CLI 0.10.3**
 
-Foundry Local is distributed as a signed installer. Windows may require an interactive
-`Add-AppxPackage` confirmation or administrator policy approval. An agent cannot bypass that.
+Foundry Local is a signed installer. Windows may require an interactive `Add-AppxPackage`
+confirmation or administrator approval. An agent cannot bypass that.
 
-After installation:
+Check versions:
 
 ```powershell
 pwsh --version
@@ -28,21 +62,19 @@ copilot --version
 foundry --version
 ```
 
-The qualified versions are recorded in [`QUALIFICATION.md`](../QUALIFICATION.md). If your Copilot
-CLI version differs, you must complete the preflight successfully before using the launcher.
+Exact tested hosts and versions live in [`QUALIFICATION.md`](../QUALIFICATION.md). If your Copilot
+CLI version differs, complete the preflight successfully before trusting the launcher.
 
-## 2. Authenticate Copilot CLI
-
-Run Copilot once:
+## 2. Authenticate Copilot CLI once
 
 ```powershell
 copilot
 ```
 
-Complete any browser/device-code authentication yourself. Do not give credentials or browser codes
+Complete browser or device-code authentication yourself. Do not give credentials or browser codes
 to a local model.
 
-## 3. Clone this repository
+## 3. Clone the repository
 
 While the repository is private:
 
@@ -59,36 +91,57 @@ foundry model load qwen2.5-7b-instruct-generic-gpu
 foundry status -o json
 ```
 
-The first load downloads several gigabytes and compiles for your hardware. This is manual setup and
-can take several minutes. Keep the machine awake.
+The first load downloads several gigabytes and compiles for your hardware. Keep the machine awake.
 
-## 5. Run static checks
+## 5. Prove the wiring with static checks
 
 ```powershell
 pwsh .\run-checks.ps1 -SkipLive
 ```
 
-This checks:
+This does not yet run the scenario. It confirms launcher policy, loopback refusal, route
+allowlisting, staged-input behavior, and the temporary stream-shim repairs.
 
-- launcher policy;
-- loopback refusal;
-- task-secret screening;
-- approved runtime/model route enforcement;
-- staged-input behavior;
-- runtime port rediscovery;
-- stream-shim repair and de-duplication.
-
-## 6. Run the complete check
+## 6. Run the scenario
 
 ```powershell
 pwsh .\run-checks.ps1
 ```
 
-This performs:
+### What you just delegated
 
-1. a Copilot CLI staged-file canary through the local model;
-2. a sealed synthetic evidence classification;
-3. an independent exact gate.
+`run-checks.ps1` runs two linked pieces of the same story:
+
+1. **Staged-file canary.** The launcher seals a tiny file with a random nonce. The local child must
+   read only that file and echo the nonce. This proves sealed input + local tool transport.
+2. **Sealed evidence check.** The launcher (or direct sealed path) gives the local model the
+   synthetic release-evidence fixture and asks whether rollback evidence is joined. The expected
+   honest answer is blocked with a named missing input.
+
+### What the local agent returns
+
+You should see a structured proposal like:
+
+```json
+{
+  "status": "blocked",
+  "answer": null,
+  "missing_input": "joined runtime and rollback evidence for the predeclared 30-day release windows",
+  "source": "synthetic-release-evidence#observation-window"
+}
+```
+
+That is a proposal, not a release decision.
+
+### What Copilot / the gate verifies
+
+The independent gate:
+
+- re-checks the sealed input hash;
+- parses the proposal;
+- compares it to the expected blocked result;
+- records `disposition: kept` only when the match is exact;
+- records `authority_advanced: false` so the receipt shows no real-world decision was advanced.
 
 Success ends with:
 
@@ -96,67 +149,50 @@ Success ends with:
 PASS: full sealed-delegation checks
 ```
 
-Receipts are written below `results/`, which is git-ignored.
+Receipts land under `results/` (git-ignored). Open `run.json`, the staged-input hashes, and the
+gate receipt before you trust any later real task.
 
-## 7. Install the skill
+## 7. Optional: watch the agentic form of the same scenario
+
+```powershell
+pwsh .\examples\evidence-check\run-agentic-demo.ps1
+```
+
+This is the same missing-evidence story, but the local child must use `view` on the sealed fixture
+before answering. It is a transport and format demo with an independent gate. It is not a general
+semantic benchmark.
+
+## 8. Install the skill for real frontier sessions
 
 ```powershell
 copilot skill add .\.github\skills\local-agent-delegation
 ```
 
-The component name intentionally remains `local-agent-delegation`.
+The component name remains `local-agent-delegation`.
 
-## 8. Delegate a bounded file task
-
-Use the skill from a frontier Copilot session. The caller should provide:
+From a frontier Copilot session, delegate only when you can supply:
 
 - one outcome;
 - exact input paths;
-- a minimal tool profile;
+- a minimal tool profile (`read` / `view` first);
 - an acceptance test;
 - a stop condition.
 
-Start with `read` tasks only. The example in the skill shows the full qualified tuple and temporary
-shim lifecycle.
+After the child finishes, inspect the receipts. Do not act merely because the child exited
+successfully.
 
-After the child finishes, inspect:
+## 9. Optional: use it from The Workshop
 
-- `run.json`;
-- staged-input hashes;
-- `stdout.txt` and `stderr.txt`;
-- the independent gate receipt.
-
-Do not act merely because the child exited successfully.
-
-## 9. Try the synthetic example directly
-
-```powershell
-pwsh .\examples\evidence-check\run-demo.ps1
-```
-
-The sealed example is faster and more stable than a full agentic loop. It demonstrates evidence
-classification and independent gating, not a general model benchmark.
-
-## 10. Optional: use it from The Workshop
-
-Do not replace a Workshop desk's frontier model with the local model. The qualified architecture
-keeps the frontier desk as the user-facing partner and delegates only bounded subtasks.
-
-Install the skill on the machine that runs the Workshop:
+Do not replace a Workshop desk's frontier model with the local model. Keep the frontier desk as the
+user-facing partner and delegate only bounded subtasks.
 
 ```powershell
 copilot skill add C:\path\to\sealed-delegation\.github\skills\local-agent-delegation
 ```
 
-Open the desk normally with Cairn's `repo` or `connected` profile. Then ask the frontier desk to use
-`local-agent-delegation` for a bounded, independently verifiable subtask.
-
-The current Workshop release has no Local Delegation toggle. The planned toggle changes whether
-the frontier desk may invoke the local worker; it does not change which model owns the desk.
-
 See [`WORKSHOP-INTEGRATION.md`](WORKSHOP-INTEGRATION.md) for the product contract.
 
-## What remains manual
+## What remains manual on purpose
 
 Humans must:
 
@@ -170,21 +206,20 @@ Humans must:
 
 Those are authority boundaries, not missing automation.
 
-## Using another local runtime
+## Using another local runtime later
 
-LM Studio, Ollama, and other loopback servers are not approved by default. Merely starting one does
-not change Sealed Delegation's route.
+LM Studio, Ollama, and other loopback servers are not approved by default. Starting one does not
+change Sealed Delegation's route.
 
-Before evaluating any alternate model, separately confirm that your organization permits the
-runtime, model, account, device, data classification, and intended use. Sealed Delegation's policy
-records technical evidence only; it cannot grant corporate or legal approval.
+Before evaluating another model, confirm your organization permits the runtime, model, account,
+device, data classification, and intended use. This project's allowlist records technical evidence
+only.
 
 To research another runtime:
 
-1. add a candidate route only after license, provenance, runtime, model id, context, tools, and gate
-   behavior are reviewed;
+1. review license, provenance, runtime, model id, context, tools, and gate behavior;
 2. run preflight and the frozen acceptance task;
-3. add it to `approved-routes.json` only after qualification.
+3. add the route to `approved-routes.json` only after qualification.
 
-`-AllowUnqualifiedRoute` exists for isolated experiments. It is intentionally loud and recorded in
-receipts; do not use it for normal Workshop tasks or claim that the route is qualified.
+`-AllowUnqualifiedRoute` is for isolated experiments. It is intentionally loud and recorded in
+receipts. Do not use it for normal Workshop tasks or claim the route is qualified.

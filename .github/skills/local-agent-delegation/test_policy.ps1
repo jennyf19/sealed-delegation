@@ -149,9 +149,16 @@ try {
     if ((Get-LocalAgentOutputFailureReason "<tool_call>`n{}`n<tool_call>") -ne "raw_tool_call_markup") {
         throw "raw tool-call markup was not rejected"
     }
-    if ($null -ne (Get-LocalAgentOutputFailureReason '{"result":"ok"}')) {
-        throw "valid output was rejected"
-    }
+        $reasoningLeak = "I need to read the file.</think>`n<tool_call>`n<function=view>`n<parameter=path>canary.txt</parameter>`n</function>`n</tool_call>"
+        if ((Get-LocalAgentOutputFailureReason $reasoningLeak) -ne "raw_tool_call_markup") {
+            throw "reasoning-prefixed raw tool-call markup was not rejected"
+        }
+        if ($null -ne (Get-LocalAgentOutputFailureReason "The docs mention <tool_call> markup.")) {
+            throw "a prose reference to tool-call markup was rejected"
+        }
+        if ($null -ne (Get-LocalAgentOutputFailureReason '{"result":"ok"}')) {
+            throw "valid output was rejected"
+        }
     if ((Get-LocalAgentOutputFailureReason -Stdout "Permission denied; check file permissions." -StagedInputCount 1) -ne "staged_input_access_claim") {
         throw "staged input access claim was not rejected"
     }

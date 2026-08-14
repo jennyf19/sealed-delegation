@@ -10,9 +10,10 @@ function Get-LocalAgentOutputFailureReason {
         return "empty_stdout"
     }
 
-    if ($Stdout.TrimStart().StartsWith("<tool_call>", [StringComparison]::Ordinal)) {
-        return "raw_tool_call_markup"
-    }
+    $rawToolCallPattern = "(?s)<tool_call>\s*(?:\{|<function(?:=|>))"
+        if ($Stdout -match $rawToolCallPattern) {
+            return "raw_tool_call_markup"
+        }
 
     $accessFailurePattern = "(?i)\b(permission denied|permission issue(?: accessing)?|(?:necessary|required) permissions to (?:read|access)|unable to (?:read|access) (?:the )?(?:file|specified file)|ensure you have (?:the )?(?:necessary )?permissions|review (?:the )?file permissions|check (?:the )?file permissions)\b"
     if ($StagedInputCount -gt 0 -and $Stdout -match $accessFailurePattern) {
