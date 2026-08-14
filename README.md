@@ -168,7 +168,7 @@ label.
 
 ## Status
 
-Private research preview. The qualified route is intentionally narrow. Read
+Public research preview. The qualified route is intentionally narrow. Read
 [`QUALIFICATION.md`](QUALIFICATION.md) before changing the model, runtime, Copilot CLI version,
 tool set, or token budget.
 
