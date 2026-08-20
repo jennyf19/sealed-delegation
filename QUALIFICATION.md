@@ -23,6 +23,14 @@ Both measured hosts below used this route shape:
 Cross-machine external validation, including a re-run under the shipped schema-classification
 prompt:
 
+| Host/runtime field | Measured value |
+|---|---|
+| CPU | Snapdragon X Elite; exact SKU was not retained in the qualification receipt |
+| Memory | Not retained in the qualification receipt |
+| Model package | `qwen2.5-7b-instruct-generic-gpu:4`, 5,324 MB |
+| Quantization | Not exposed by the Foundry Local 0.10.3 catalog or cached model metadata |
+| Token throughput | Completion-token count and decode timing were not retained |
+
 | Task | Result | Wall | Notes |
 |---|---|---:|---|
 | staged nonce canary | exact | 141.562s | earlier cross-machine receipt |
@@ -39,11 +47,27 @@ requiring preflight before claiming the route.
 
 Same route shape on an x64 development machine with GitHub Copilot CLI **1.0.80**:
 
+| Host/runtime field | Measured value |
+|---|---|
+| System | Microsoft Surface Laptop 6 for Business |
+| CPU | Intel Core Ultra 7 165H, 16 cores / 22 logical processors |
+| Memory | 32 GB installed |
+| Inference device | Intel Arc integrated GPU |
+| Execution provider | ONNX Runtime WebGPU |
+| Model package | `qwen2.5-7b-instruct-generic-gpu:4`, 5,324 MB |
+| Quantization | Not exposed by the Foundry Local 0.10.3 catalog or cached model metadata |
+
 | Task | Result | Wall | Notes |
 |---|---|---:|---|
 | staged nonce canary | exact | 154.665s | 2026-08-14 |
 | sealed direct missing-evidence proposal | exact and independently kept | 20.612s | 2026-08-14 |
 | agentic staged-file missing-evidence proposal | exact and independently kept | 213.680s | 2026-08-14 |
+
+The sealed direct call used 398 prompt tokens and produced 52 completion tokens. Dividing completion
+tokens by total request wall time gives **2.52 completion tokens/second all-in**. This is not a
+decode-only benchmark: it includes request handling, prompt prefill, generation, and response
+serialization. The agentic receipts did not capture first-token or decode timing, so no
+decode-only tokens/second claim is available yet.
 
 The x64 run also exposed a Windows path-depth failure when the isolated child home lived under a
 very long run directory (SQLite `unable to open database file` before inference). Durable receipts
