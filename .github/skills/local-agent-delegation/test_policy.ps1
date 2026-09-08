@@ -146,19 +146,32 @@ try {
     if ((Get-LocalAgentOutputFailureReason "") -ne "empty_stdout") {
         throw "empty output was not rejected"
     }
+    if ((Get-LocalAgentOutputFailureReason "Package extraction took 8614ms") -ne "diagnostic_only_stdout") {
+        throw "package extraction diagnostic was accepted as semantic output"
+    }
+    if ((Get-LocalAgentOutputFailureReason "WARNING: Package extraction took 8614ms") -ne "diagnostic_only_stdout") {
+        throw "warning-prefixed package extraction diagnostic was accepted as semantic output"
+    }
+    if ($null -ne (Get-LocalAgentOutputFailureReason "Package extraction took 8614ms`nRESULT: ready")) {
+        throw "valid output accompanying a package diagnostic was rejected"
+    }
+    $serializationNoise = '"0"0"#' + ('"' * 80) + '#'
+    if ((Get-LocalAgentOutputFailureReason $serializationNoise) -ne "serialization_noise_stdout") {
+        throw "serialization noise was accepted as semantic output"
+    }
     if ((Get-LocalAgentOutputFailureReason "<tool_call>`n{}`n<tool_call>") -ne "raw_tool_call_markup") {
         throw "raw tool-call markup was not rejected"
     }
-        $reasoningLeak = "I need to read the file.</think>`n<tool_call>`n<function=view>`n<parameter=path>canary.txt</parameter>`n</function>`n</tool_call>"
-        if ((Get-LocalAgentOutputFailureReason $reasoningLeak) -ne "raw_tool_call_markup") {
-            throw "reasoning-prefixed raw tool-call markup was not rejected"
-        }
-        if ($null -ne (Get-LocalAgentOutputFailureReason "The docs mention <tool_call> markup.")) {
-            throw "a prose reference to tool-call markup was rejected"
-        }
-        if ($null -ne (Get-LocalAgentOutputFailureReason '{"result":"ok"}')) {
-            throw "valid output was rejected"
-        }
+    $reasoningLeak = "I need to read the file.</think>`n<tool_call>`n<function=view>`n<parameter=path>canary.txt</parameter>`n</function>`n</tool_call>"
+    if ((Get-LocalAgentOutputFailureReason $reasoningLeak) -ne "raw_tool_call_markup") {
+        throw "reasoning-prefixed raw tool-call markup was not rejected"
+    }
+    if ($null -ne (Get-LocalAgentOutputFailureReason "The docs mention <tool_call> markup.")) {
+        throw "a prose reference to tool-call markup was rejected"
+    }
+    if ($null -ne (Get-LocalAgentOutputFailureReason '{"result":"ok"}')) {
+        throw "valid output was rejected"
+    }
     if ((Get-LocalAgentOutputFailureReason -Stdout "Permission denied; check file permissions." -StagedInputCount 1) -ne "staged_input_access_claim") {
         throw "staged input access claim was not rejected"
     }
