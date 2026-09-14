@@ -18,6 +18,9 @@ $launcher = Join-Path $root ".github\skills\local-agent-delegation\scripts\invok
 $source = Join-Path $here "fixture.md"
 $RunRoot = if ($RunRoot) { $RunRoot } else { Join-Path $here "results\agent-runs" }
 $shim = $null
+if ($BaseUrl -and $RuntimeId -eq "foundry-local") {
+    throw "An external -BaseUrl requires a distinct -RuntimeId so it cannot inherit the qualified Foundry Local route."
+}
 $task = @"
 Use view to read exactly fixture.md.
 Determine only whether releaseReadiness.rollbackEvidenceLinked can be set to pass for the

@@ -53,8 +53,23 @@ export function addOpenAiMessages(request, messages) {
   return request;
 }
 
-export function addOpenAiTools(session, tools) {
-  for (const tool of tools ?? []) {
+export function selectedOpenAiTools(tools, toolChoice) {
+  if (!toolChoice || typeof toolChoice === "string") return tools ?? [];
+  const requestedName = toolChoice.function?.name;
+  if (!requestedName) {
+    throw new Error("Named tool_choice must include function.name.");
+  }
+  const selected = (tools ?? []).filter(
+    (tool) => tool?.type === "function" && tool.function?.name === requestedName,
+  );
+  if (selected.length !== 1) {
+    throw new Error(`Named tool_choice '${requestedName}' is not uniquely defined.`);
+  }
+  return selected;
+}
+
+export function addOpenAiTools(session, tools, toolChoice) {
+  for (const tool of selectedOpenAiTools(tools, toolChoice)) {
     if (tool?.type !== "function" || !tool.function?.name) continue;
     session.addToolDefinition({
       name: tool.function.name,
@@ -120,6 +135,23 @@ export function unwrapNonToolCallEnvelope(text) {
   }
 }
 
+export function toOpenAiFinishReason(finishReason) {
+  switch (finishReason) {
+    case "toolCalls":
+      return "tool_calls";
+    case "stop":
+      return "stop";
+    case "length":
+      return "length";
+    case "error":
+      throw new Error("Foundry Local ended generation with an error.");
+    case "none":
+      throw new Error("Foundry Local ended generation without a terminal reason.");
+    default:
+      throw new Error(`Unsupported Foundry Local finish reason: ${finishReason}`);
+  }
+}
+
 function completionId() {
   return `chatcmpl_${crypto.randomUUID().replaceAll("-", "")}`;
 }
@@ -175,7 +207,7 @@ async function handleCompletion(res, model, body) {
       toolCount: body.tools?.length ?? 0,
       toolChoice: body.tool_choice ?? "auto",
     });
-    addOpenAiTools(session, body.tools);
+    addOpenAiTools(session, body.tools, body.tool_choice);
     const request = addOpenAiMessages(new Request(), body.messages);
     request.setOptions(toRequestOptions(body));
 
@@ -220,6 +252,7 @@ async function handleCompletion(res, model, body) {
         });
       }
       const response = await stream.response;
+      const finishReason = toOpenAiFinishReason(response.finishReason);
       for (const item of response.output) {
         if (
           item.type === "toolCall" &&
@@ -270,8 +303,7 @@ async function handleCompletion(res, model, body) {
           {
             index: 0,
             delta: {},
-            finish_reason:
-              response.finishReason === "toolCalls" ? "tool_calls" : "stop",
+            finish_reason: finishReason,
           },
         ],
         usage: {
@@ -285,6 +317,7 @@ async function handleCompletion(res, model, body) {
     }
 
     const response = await session.processRequest(request);
+    const finishReason = toOpenAiFinishReason(response.finishReason);
     debug("response", {
       stream: false,
       finishReason: response.finishReason,
@@ -319,7 +352,7 @@ async function handleCompletion(res, model, body) {
               content: text,
               tool_calls: toolCalls,
             },
-            finish_reason: toolCalls.length > 0 ? "tool_calls" : "stop",
+            finish_reason: finishReason,
           },
         ],
         usage: {
@@ -382,9 +415,11 @@ export async function startAdapter({
       res.writeHead(404, { "content-type": "application/json" });
       res.end(JSON.stringify({ error: { message: "Not found." } }));
     } catch (error) {
-      if (!res.headersSent) {
-        res.writeHead(500, { "content-type": "application/json" });
+      if (res.headersSent) {
+        res.destroy(error instanceof Error ? error : new Error(String(error)));
+        return;
       }
+      res.writeHead(500, { "content-type": "application/json" });
       res.end(
         JSON.stringify({
           error: { message: error instanceof Error ? error.message : String(error) },

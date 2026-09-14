@@ -4,8 +4,10 @@ import test from "node:test";
 import {
   addOpenAiMessages,
   addOpenAiTools,
+  selectedOpenAiTools,
   startAdapter,
   stripToolCallMarkup,
+  toOpenAiFinishReason,
   toRequestOptions,
   unwrapNonToolCallEnvelope,
 } from "./adapter.mjs";
@@ -94,6 +96,36 @@ test("maps a named OpenAI tool choice to required", () => {
     }).toolChoice,
     "required",
   );
+});
+
+test("restricts registered tools for a named tool choice", () => {
+  const tools = [
+    { type: "function", function: { name: "view" } },
+    { type: "function", function: { name: "glob" } },
+  ];
+  assert.deepEqual(
+    selectedOpenAiTools(tools, {
+      type: "function",
+      function: { name: "view" },
+    }),
+    [tools[0]],
+  );
+  assert.throws(
+    () =>
+      selectedOpenAiTools(tools, {
+        type: "function",
+        function: { name: "missing" },
+      }),
+    /not uniquely defined/,
+  );
+});
+
+test("preserves terminal completion reasons", () => {
+  assert.equal(toOpenAiFinishReason("toolCalls"), "tool_calls");
+  assert.equal(toOpenAiFinishReason("stop"), "stop");
+  assert.equal(toOpenAiFinishReason("length"), "length");
+  assert.throws(() => toOpenAiFinishReason("error"), /ended generation with an error/);
+  assert.throws(() => toOpenAiFinishReason("none"), /without a terminal reason/);
 });
 
 test("strips duplicated tool markup from non-streaming text", () => {
