@@ -1,0 +1,267 @@
+{
+  "schema_version": "sealed-delegation/missing-evidence-corpus/v1",
+  "corpus_id": "qwen25-session-missing-evidence-n20",
+  "prompt_template": "../prompt-template.txt",
+  "fixtures": [
+    {
+      "id": "timezone-source-zone",
+      "domain": "calendar scheduling",
+      "source": "sources/01-timezone-source-zone.md",
+      "source_citation": "synthetic-calendar#handoff-17",
+      "task": "Determine the UTC start time for the partner handoff.",
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input": "source time zone for the 09:30 partner handoff",
+        "source": "synthetic-calendar#handoff-17"
+      }
+    },
+    {
+      "id": "exchange-rate-date",
+      "domain": "currency conversion",
+      "source": "sources/02-exchange-rate-date.md",
+      "source_citation": "synthetic-invoice#fx-conversion",
+      "task": "Determine the invoice total in US dollars.",
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input": "EUR-to-USD exchange rate and effective date",
+        "source": "synthetic-invoice#fx-conversion"
+      }
+    },
+    {
+      "id": "frontier-equivalent-cost",
+      "domain": "inference cost comparison",
+      "source": "sources/03-frontier-equivalent-cost.md",
+      "source_citation": "synthetic-routing#cost-comparison",
+      "task": "Determine the frontier-equivalent call cost for the recorded workload.",
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input": "frontier model input and output token prices for the measured date",
+        "source": "synthetic-routing#cost-comparison"
+      }
+    },
+    {
+      "id": "percentage-denominator",
+      "domain": "service reliability",
+      "source": "sources/04-percentage-denominator.md",
+      "source_citation": "synthetic-operations#success-rate",
+      "task": "Determine the successful-request percentage.",
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input": "total request count for the measurement window",
+        "source": "synthetic-operations#success-rate"
+      }
+    },
+    {
+      "id": "purchase-quantity",
+      "domain": "procurement",
+      "source": "sources/05-purchase-quantity.md",
+      "source_citation": "synthetic-procurement#order-884",
+      "task": "Determine the pre-tax purchase total.",
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input": "quantity of storage modules ordered",
+        "source": "synthetic-procurement#order-884"
+      }
+    },
+    {
+      "id": "tax-jurisdiction-rate",
+      "domain": "sales tax",
+      "source": "sources/06-tax-jurisdiction-rate.md",
+      "source_citation": "synthetic-checkout#tax-line",
+      "task": "Determine the sales-tax amount.",
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input": "applicable tax jurisdiction and tax rate",
+        "source": "synthetic-checkout#tax-line"
+      }
+    },
+    {
+      "id": "score-weighting-values",
+      "domain": "vendor scoring",
+      "source": "sources/07-score-weighting-values.md",
+      "source_citation": "synthetic-vendor-review#weighted-score",
+      "task": "Determine the weighted vendor score.",
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input": "weight assigned to each vendor scoring category",
+        "source": "synthetic-vendor-review#weighted-score"
+      }
+    },
+    {
+      "id": "concurrency-capacity",
+      "domain": "load testing",
+      "source": "sources/08-concurrency-capacity.md",
+      "source_citation": "synthetic-load-test#capacity-check",
+      "task": "Determine whether the planned concurrency is within supported capacity.",
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input": "supported concurrent-session capacity for the target host",
+        "source": "synthetic-load-test#capacity-check"
+      }
+    },
+    {
+      "id": "observation-window-join-key",
+      "domain": "experiment analysis",
+      "source": "sources/09-observation-window-join-key.md",
+      "source_citation": "synthetic-experiment#window-join",
+      "task": "Determine the rollback rate for the predeclared observation windows.",
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input": "join key linking releases to their observation-window outcomes",
+        "source": "synthetic-experiment#window-join"
+      }
+    },
+    {
+      "id": "rollback-runtime-link",
+      "domain": "release readiness",
+      "source": "sources/10-rollback-runtime-link.md",
+      "source_citation": "synthetic-release#rollback-evidence",
+      "task": "Determine whether rollbackEvidenceLinked can be set to pass.",
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input": "joined runtime and rollback evidence for the predeclared 30-day release windows",
+        "source": "synthetic-release#rollback-evidence"
+      }
+    },
+    {
+      "id": "emissions-factor",
+      "domain": "energy reporting",
+      "source": "sources/11-emissions-factor.md",
+      "source_citation": "synthetic-energy#monthly-emissions",
+      "task": "Determine the carbon emissions for the recorded electricity use.",
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input": "grid emissions factor for the facility region and reporting month",
+        "source": "synthetic-energy#monthly-emissions"
+      }
+    },
+    {
+      "id": "shipping-surcharge-basis",
+      "domain": "freight billing",
+      "source": "sources/12-shipping-surcharge-basis.md",
+      "source_citation": "synthetic-freight#fuel-surcharge",
+      "task": "Determine the fuel surcharge for the shipment.",
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input": "fuel-surcharge percentage applicable on the shipment date",
+        "source": "synthetic-freight#fuel-surcharge"
+      }
+    },
+    {
+      "id": "sla-measurement-window",
+      "domain": "support service levels",
+      "source": "sources/13-sla-measurement-window.md",
+      "source_citation": "synthetic-support#sla-check",
+      "task": "Determine whether the response-time SLA was met.",
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input": "contractual SLA measurement window and excluded hours",
+        "source": "synthetic-support#sla-check"
+      }
+    },
+    {
+      "id": "inventory-opening-balance",
+      "domain": "inventory accounting",
+      "source": "sources/14-inventory-opening-balance.md",
+      "source_citation": "synthetic-inventory#shrinkage",
+      "task": "Determine the inventory shrinkage percentage.",
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input": "opening inventory quantity for the audit period",
+        "source": "synthetic-inventory#shrinkage"
+      }
+    },
+    {
+      "id": "amount-currency",
+      "domain": "travel reimbursement",
+      "source": "sources/15-amount-currency.md",
+      "source_citation": "synthetic-travel#receipt-204",
+      "task": "Determine the reimbursable amount in Canadian dollars.",
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input": "currency denomination of the recorded receipt amount",
+        "source": "synthetic-travel#receipt-204"
+      }
+    },
+    {
+      "id": "latency-population",
+      "domain": "performance measurement",
+      "source": "sources/16-latency-population.md",
+      "source_citation": "synthetic-performance#p95",
+      "task": "Determine the p95 request latency.",
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input": "complete request-latency sample population for the test window",
+        "source": "synthetic-performance#p95"
+      }
+    },
+    {
+      "id": "forecast-baseline-period",
+      "domain": "capacity forecasting",
+      "source": "sources/17-forecast-baseline-period.md",
+      "source_citation": "synthetic-forecast#growth",
+      "task": "Determine the projected monthly demand after applying the stated growth rate.",
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input": "baseline demand month to which the growth rate applies",
+        "source": "synthetic-forecast#growth"
+      }
+    },
+    {
+      "id": "attribution-window",
+      "domain": "marketing attribution",
+      "source": "sources/18-attribution-window.md",
+      "source_citation": "synthetic-campaign#conversion-credit",
+      "task": "Determine the number of conversions attributable to the campaign.",
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input": "approved conversion-attribution window",
+        "source": "synthetic-campaign#conversion-credit"
+      }
+    },
+    {
+      "id": "retention-start-date",
+      "domain": "records retention",
+      "source": "sources/19-retention-start-date.md",
+      "source_citation": "synthetic-records#deletion-date",
+      "task": "Determine the earliest permitted deletion date.",
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input": "event date that starts the seven-year retention period",
+        "source": "synthetic-records#deletion-date"
+      }
+    },
+    {
+      "id": "confidence-interval-inputs",
+      "domain": "survey statistics",
+      "source": "sources/20-confidence-interval-inputs.md",
+      "source_citation": "synthetic-survey#confidence-interval",
+      "task": "Determine the 95 percent confidence interval for the satisfaction score.",
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input": "survey sample size and response variance",
+        "source": "synthetic-survey#confidence-interval"
+      }
+    }
+  ]
+}

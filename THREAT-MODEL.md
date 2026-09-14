@@ -1,7 +1,8 @@
 # Threat model
 
-**Review status:** Two-party review completed 2026-08-11. Enforcement claims were checked against
-the implementation and tests; executable PowerShell evidence comes from the qualified host.
+**Review status:** Two-party review completed 2026-08-11 for the qualified CLI/shim route.
+The Foundry Local SDK 2.0.1 Session adapter is a separate, unqualified route under issue #5; its
+addendum below requires review before promotion.
 
 ## System in one sentence
 
@@ -53,6 +54,9 @@ whose output is always untrusted, and accepts nothing until an independent gate 
 | T10 | Secret pasted into task text | Pre-launch secret-pattern screen; explicit high-risk override | Launcher and policy test | Pattern matching cannot detect every secret |
 | T11 | Hung or looping child | Hard timeout and process-tree termination | Launcher | Long but progressing runs can still be expensive in wall time |
 | T12 | Unapproved or policy-banned model is selected | Fail-closed exact runtime/model/profile/budget allowlist; explicit override recorded as unqualified | Route policy in launcher, preflight, and sealed demo; PowerShell and Node tests | Runtime/model labels are configuration claims, not cryptographic attestation of weights |
+| T13 | Embedded SDK terminal failure is hidden behind plausible partial output | Adapter records per-request terminal reason and the qualification gate rejects `length`, `error`, missing telemetry, and a final reason other than `stop` | Session adapter telemetry and qualification grader tests | The SDK and native execution provider remain trusted to report their own terminal state honestly |
+| T14 | Session adapter port remains reachable longer than required | Ephemeral loopback bind; runner starts immediately before serial execution and closes in `finally`; lifecycle receipt records closure | Session qualification runner and adapter loopback test | Other same-user processes can reach the port during the bounded run |
+| T15 | Adapter or embedded native runtime processes untrusted staged content | Prompts and staged files remain bounded by the launcher; only `view` is exposed; output remains untrusted and independently graded | Launcher, adapter, deterministic grader | The embedded SDK/native provider runs as the OS user without an OS sandbox |
 
 ## Explicit non-goals
 
@@ -76,6 +80,8 @@ whose output is always untrusted, and accepts nothing until an independent gate 
 | Secret-pattern refusal | `test_policy.ps1` |
 | Approved-route enforcement | `test_policy.ps1` and `route-policy.test.mjs` |
 | Shim repair and de-duplication | `foundry-stream-shim.test.mjs` |
+| Session SDK terminal-reason telemetry | `foundry-session-probe/adapter.test.mjs` |
+| Session corpus and fail-closed grader | `foundry-session-qualification/qualification.test.mjs` |
 
 ## Review rule
 

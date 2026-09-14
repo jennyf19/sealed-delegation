@@ -6,11 +6,39 @@ import {
   addOpenAiTools,
   selectedOpenAiTools,
   startAdapter,
+  startAdapterServer,
   stripToolCallMarkup,
   toOpenAiFinishReason,
   toRequestOptions,
   unwrapNonToolCallEnvelope,
 } from "./adapter.mjs";
+
+function fakeSession(response) {
+  return {
+    addToolDefinition() {},
+    processStreamingRequest() {
+      const stream = (async function* () {
+        for (const item of response.streamItems ?? []) yield item;
+      })();
+      stream.response = Promise.resolve(response);
+      return stream;
+    },
+    dispose() {},
+  };
+}
+
+function responseFixture(finishReason) {
+  return {
+    finishReason,
+    streamItems: [],
+    output: [],
+    usage: {
+      promptTokens: 10,
+      completionTokens: 2,
+      totalTokens: 12,
+    },
+  };
+}
 
 test("maps OpenAI messages including tool history", () => {
   const items = [];
@@ -157,4 +185,87 @@ test("rejects a non-loopback bind", async () => {
     startAdapter({ host: "0.0.0.0" }),
     /must bind to a loopback host/,
   );
+});
+
+test("records an SDK length terminal reason for fail-closed grading", async () => {
+  const events = [];
+  const adapter = await startAdapterServer({
+    model: { id: "qwen2.5-7b-instruct-generic-gpu:4" },
+    createSession: () => fakeSession(responseFixture("length")),
+    createRequest: () => ({ setOptions() {} }),
+    recordEvent: (event) => events.push(event),
+  });
+  try {
+    const response = await fetch(`${adapter.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "qwen2.5-7b-instruct-generic-gpu:4",
+        stream: true,
+        messages: [],
+      }),
+    });
+    const body = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(body, /"finish_reason":"length"/);
+    assert.equal(events.at(-1).event, "request_completed");
+    assert.equal(events.at(-1).finish_reason, "length");
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("records and terminates an SDK error response", async () => {
+  const events = [];
+  const adapter = await startAdapterServer({
+    model: { id: "qwen2.5-7b-instruct-generic-gpu:4" },
+    createSession: () => fakeSession(responseFixture("error")),
+    createRequest: () => ({ setOptions() {} }),
+    recordEvent: (event) => events.push(event),
+  });
+  try {
+    await assert.rejects(async () => {
+      const response = await fetch(`${adapter.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model: "qwen2.5-7b-instruct-generic-gpu:4",
+          stream: true,
+          messages: [],
+        }),
+      });
+      await response.text();
+    });
+    assert.equal(events.at(-1).event, "request_failed");
+    assert.equal(events.at(-1).finish_reason, "error");
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("rejects and records a wrong model id", async () => {
+  const events = [];
+  const adapter = await startAdapterServer({
+    model: { id: "qwen2.5-7b-instruct-generic-gpu:4" },
+    createSession: () => {
+      throw new Error("session should not be created");
+    },
+    recordEvent: (event) => events.push(event),
+  });
+  try {
+    const response = await fetch(`${adapter.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "wrong-model",
+        stream: true,
+        messages: [],
+      }),
+    });
+    assert.equal(response.status, 400);
+    assert.equal(events.at(-1).event, "request_rejected");
+    assert.equal(events.at(-1).reason, "unrecognized_model");
+  } finally {
+    await adapter.close();
+  }
 });

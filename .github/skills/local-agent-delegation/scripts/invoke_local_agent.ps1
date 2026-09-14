@@ -221,7 +221,10 @@ if (-not $DryRun) {
     try {
         $null = Invoke-ModelHealth $api
     } catch {
-        if (-not (Get-Command foundry -ErrorAction SilentlyContinue)) { throw }
+        if ($RuntimeId -ne "foundry-local" -or
+            -not (Get-Command foundry -ErrorAction SilentlyContinue)) {
+            throw
+        }
         foundry model load $FoundryAlias | Out-Null
         $null = Invoke-ModelHealth $api
     }
@@ -253,6 +256,66 @@ if ($copilotNative) {
     [string[]]$copilotPrefixArguments = @("-NoProfile", "-File", $copilotScript.Source)
 } else {
     throw "No directly executable Copilot CLI or PowerShell shim was found."
+}
+$copilotVersionStartInfo = [System.Diagnostics.ProcessStartInfo]::new()
+$copilotVersionStartInfo.FileName = $copilotLauncher
+$copilotVersionStartInfo.UseShellExecute = $false
+$copilotVersionStartInfo.RedirectStandardOutput = $true
+$copilotVersionStartInfo.RedirectStandardError = $true
+$copilotVersionStartInfo.CreateNoWindow = $true
+foreach ($argument in $copilotPrefixArguments) {
+    $copilotVersionStartInfo.ArgumentList.Add($argument)
+}
+$copilotVersionStartInfo.ArgumentList.Add("--version")
+$copilotVersionProcess = [System.Diagnostics.Process]::new()
+$copilotVersionProcess.StartInfo = $copilotVersionStartInfo
+$versionEnvironmentRoot = New-Item -ItemType Directory -Force (
+    Join-Path ([System.IO.Path]::GetTempPath()) ("copilot-version-" + [guid]::NewGuid().ToString("N"))
+)
+try {
+    $versionHome = New-Item -ItemType Directory -Force (Join-Path $versionEnvironmentRoot "home")
+    $versionTemp = New-Item -ItemType Directory -Force (Join-Path $versionEnvironmentRoot "temp")
+    $versionAppData = New-Item -ItemType Directory -Force (Join-Path $versionHome "AppData\Roaming")
+    $versionLocalAppData = New-Item -ItemType Directory -Force (Join-Path $versionHome "AppData\Local")
+    $copilotVersionStartInfo.Environment.Clear()
+    foreach ($key in @(
+        "SystemRoot", "SystemDrive", "WINDIR", "COMSPEC", "PATH", "PATHEXT", "OS",
+        "PROCESSOR_ARCHITECTURE", "PROCESSOR_IDENTIFIER", "NUMBER_OF_PROCESSORS"
+    )) {
+        $value = [System.Environment]::GetEnvironmentVariable($key)
+        if (-not [string]::IsNullOrEmpty($value)) {
+            $copilotVersionStartInfo.Environment[$key] = $value
+        }
+    }
+    $copilotVersionStartInfo.Environment["HOME"] = $versionHome.FullName
+    $copilotVersionStartInfo.Environment["USERPROFILE"] = $versionHome.FullName
+    $copilotVersionStartInfo.Environment["APPDATA"] = $versionAppData.FullName
+    $copilotVersionStartInfo.Environment["LOCALAPPDATA"] = $versionLocalAppData.FullName
+    $copilotVersionStartInfo.Environment["TEMP"] = $versionTemp.FullName
+    $copilotVersionStartInfo.Environment["TMP"] = $versionTemp.FullName
+    $null = $copilotVersionProcess.Start()
+    $copilotVersionStdout = $copilotVersionProcess.StandardOutput.ReadToEndAsync()
+    $copilotVersionStderr = $copilotVersionProcess.StandardError.ReadToEndAsync()
+    $copilotVersionCompleted = $copilotVersionProcess.WaitForExit(30000)
+    if (-not $copilotVersionCompleted) {
+        $copilotVersionProcess.Kill($true)
+        $copilotVersionProcess.WaitForExit()
+    }
+    $copilotVersionOutput = (
+        $copilotVersionStdout.GetAwaiter().GetResult() +
+        $copilotVersionStderr.GetAwaiter().GetResult()
+    ).Trim()
+    if (-not $copilotVersionCompleted) {
+        throw "The selected Copilot executable version check timed out."
+    }
+    if ($copilotVersionProcess.ExitCode -ne 0) {
+        throw "The selected Copilot executable did not report its version."
+    }
+} finally {
+    $copilotVersionProcess.Dispose()
+    if (Test-Path -LiteralPath $versionEnvironmentRoot) {
+        Remove-Item -LiteralPath $versionEnvironmentRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 $runId = (Get-Date -Format "yyyyMMdd-HHmmss") + "-" + [guid]::NewGuid().ToString("N").Substring(0, 8)
 $runDirectory = New-Item -ItemType Directory -Force (Join-Path $RunRoot $runId)
@@ -362,6 +425,7 @@ $metadata = [ordered]@{
     staged_inputs = @($stagedInputManifest)
     copilot_command = $copilotCommand
     copilot_launcher = $copilotLauncher
+    copilot_version_output = $copilotVersionOutput
     effective_task_path = $effectiveTaskPath
     effective_task_sha256 = $effectiveTaskHash
     credential_environment_inherited = [bool]$AllowCredentialEnvironment

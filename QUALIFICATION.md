@@ -95,6 +95,26 @@ A local `BLOCK` remains a proposal. The caller must independently confirm the na
 The corpus and raw receipts are not shipped in this preview; a public reproduction kit is follow-up
 work. Do not treat this claim as independently reproducible from the current package.
 
+## Session adapter qualification in progress
+
+Issue #5 qualifies a separate route that uses `foundry-local-sdk` 2.0.1 `ChatSession` requests
+through the loopback adapter in `tools/foundry-session-probe`. The public reproduction harness is
+in `tools/foundry-session-qualification`.
+
+This route remains unqualified. Its frozen target tuple is:
+
+- runtime `foundry-local-session`;
+- model package `qwen2.5-7b-instruct-generic-gpu:4`;
+- stream mode on;
+- `view` as the only child tool;
+- 16,384 prompt-token budget;
+- `read` profile with `evidence-check` task mode.
+
+The harness requires explicit operator approval of the corpus hash before it starts the adapter or
+executes a model request. It preserves first attempts, requires explicit retry IDs, records
+provider terminal reasons, and rejects missing provider telemetry. Do not add this tuple to
+`approved-routes.json` from harness code or partial results.
+
 ## Not qualified
 
 - edit or shell profiles;
