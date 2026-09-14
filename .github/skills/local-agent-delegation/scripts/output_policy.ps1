@@ -16,7 +16,7 @@ function Get-LocalAgentOutputFailureReason {
         return "diagnostic_only_stdout"
     }
 
-    if ($semanticOutput.Length -gt 64 -and $semanticOutput -match '^[\"#0\s]+$') {
+    if ($semanticOutput.Length -gt 64 -and $semanticOutput -match '^[\"#0()\s]+$') {
         return "serialization_noise_stdout"
     }
 

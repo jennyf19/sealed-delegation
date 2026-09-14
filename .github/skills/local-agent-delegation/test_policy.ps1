@@ -159,6 +159,10 @@ try {
     if ((Get-LocalAgentOutputFailureReason $serializationNoise) -ne "serialization_noise_stdout") {
         throw "serialization noise was accepted as semantic output"
     }
+    $parenthesizedSerializationNoise = '"0"#' + ('"' * 80) + ')"#'
+    if ((Get-LocalAgentOutputFailureReason $parenthesizedSerializationNoise) -ne "serialization_noise_stdout") {
+        throw "parenthesized serialization noise was accepted as semantic output"
+    }
     if ((Get-LocalAgentOutputFailureReason "<tool_call>`n{}`n<tool_call>") -ne "raw_tool_call_markup") {
         throw "raw tool-call markup was not rejected"
     }

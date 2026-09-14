@@ -3,7 +3,10 @@ param(
     [string]$Model = "qwen2.5-7b-instruct-generic-gpu",
     [int]$MaxPromptTokens = 16384,
     [int]$TimeoutSeconds = 900,
-    [string]$RunRoot
+    [string]$RunRoot,
+    [string]$BaseUrl,
+    [string]$RuntimeId = "foundry-local",
+    [switch]$AllowUnqualifiedRoute
 )
 
 $ErrorActionPreference = "Stop"
@@ -34,11 +37,14 @@ input exactly as specified by the schema.
 "@
 
 try {
-    $shim = Start-LocalDelegationFoundryShim `
-        -RepoRoot $root `
-        -LogDirectory $RunRoot `
-        -Model $Model `
-        -FoundryAlias $Model
+    if (-not $BaseUrl) {
+        $shim = Start-LocalDelegationFoundryShim `
+            -RepoRoot $root `
+            -LogDirectory $RunRoot `
+            -Model $Model `
+            -FoundryAlias $Model
+        $BaseUrl = $shim.BaseUrl
+    }
 
     $started = (Get-Date).ToUniversalTime()
     & $launcher `
@@ -47,12 +53,14 @@ try {
         -InputPaths $source `
         -Profile read `
         -TaskMode evidence-check `
+        -RuntimeId $RuntimeId `
         -Model $Model `
         -FoundryAlias $Model `
         -MaxPromptTokens $MaxPromptTokens `
         -MaxOutputTokens 256 `
         -Stream on `
-        -BaseUrl $shim.BaseUrl `
+        -BaseUrl $BaseUrl `
+        -AllowUnqualifiedRoute:$AllowUnqualifiedRoute `
         -TimeoutSeconds $TimeoutSeconds `
         -RunRoot $RunRoot
     $launcherExit = $LASTEXITCODE
