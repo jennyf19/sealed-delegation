@@ -272,24 +272,24 @@ async function handleCompletion(res, model, body) {
           toolIndex += 1;
         }
       }
-      if (emittedToolCallIds.size === 0) {
-        const terminalText = response.output
-          .map((item) => itemDelta(item, toolIndex)?.content ?? "")
-          .join("");
-        const content = unwrapNonToolCallEnvelope(
-          streamedText || terminalText,
-        );
-        if (content) {
-          writeSse(res, {
-            id,
-            object: "chat.completion.chunk",
-            created,
-            model: model.id,
-            choices: [
-              { index: 0, delta: { content }, finish_reason: null },
-            ],
-          });
-        }
+      const terminalText = response.output
+        .map((item) => itemDelta(item, toolIndex)?.content ?? "")
+        .join("");
+      const combinedText = streamedText || terminalText;
+      const content =
+        emittedToolCallIds.size > 0
+          ? stripToolCallMarkup(combinedText)
+          : unwrapNonToolCallEnvelope(combinedText);
+      if (content) {
+        writeSse(res, {
+          id,
+          object: "chat.completion.chunk",
+          created,
+          model: model.id,
+          choices: [
+            { index: 0, delta: { content }, finish_reason: null },
+          ],
+        });
       }
       debug("response", {
         stream: true,
