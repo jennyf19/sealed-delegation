@@ -145,6 +145,7 @@ qualified here.
 | `.github/skills/local-agent-delegation/` | Installable skill and isolated launcher |
 | `tools/local-agent-preflight.ps1` | End-to-end staged-file canary |
 | `tools/foundry-stream-shim.mjs` | Temporary repair for Foundry Local #874 |
+| `tools/foundry-session-probe/` | Unqualified Foundry Local 2.0.1 typed Session API adapter experiment |
 | `examples/evidence-check/` | Synthetic sealed task, gate, and agentic variant |
 | `run-checks.ps1` | Static checks and optional live validation |
 
@@ -168,7 +169,8 @@ label.
 
 ## Status
 
-Public research preview. The qualified route is intentionally narrow. Read
+Public research preview. The qualified route is intentionally narrow. The Session API adapter is
+an unqualified experiment and does not replace the approved shimmed route. Read
 [`QUALIFICATION.md`](QUALIFICATION.md) before changing the model, runtime, Copilot CLI version,
 tool set, or token budget.
 

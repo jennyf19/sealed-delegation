@@ -1,0 +1,13 @@
+{
+  "name": "sealed-delegation-foundry-session-probe",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "probe": "node probe.mjs",
+    "serve": "node adapter.mjs",
+    "test": "node --test adapter.test.mjs"
+  },
+  "dependencies": {
+    "foundry-local-sdk": "2.0.1"
+  }
+}

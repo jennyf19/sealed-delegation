@@ -1,3 +1,4 @@
 **/results/
 **/*-runs/
+**/node_modules/
 *.zip
