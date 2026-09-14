@@ -231,7 +231,7 @@ async function handleCompletion(res, model, body) {
       const stream = session.processStreamingRequest(request);
       let toolIndex = 0;
       const outputTypes = [];
-      let emittedText = false;
+      let streamedText = "";
       const emittedToolCallIds = new Set();
       for await (const item of stream) {
         outputTypes.push(item.type);
@@ -241,7 +241,8 @@ async function handleCompletion(res, model, body) {
           emittedToolCallIds.add(item.callId);
           toolIndex += 1;
         } else if (delta.content) {
-          emittedText = true;
+          streamedText += delta.content;
+          continue;
         }
         writeSse(res, {
           id,
@@ -269,23 +270,25 @@ async function handleCompletion(res, model, body) {
           });
           emittedToolCallIds.add(item.callId);
           toolIndex += 1;
-        } else if (
-          !emittedText &&
-          emittedToolCallIds.size === 0 &&
-          (item.type === "text" || item.type === "message")
-        ) {
-          const delta = itemDelta(item, toolIndex);
-          if (delta?.content) {
-            delta.content = unwrapNonToolCallEnvelope(delta.content);
-            writeSse(res, {
-              id,
-              object: "chat.completion.chunk",
-              created,
-              model: model.id,
-              choices: [{ index: 0, delta, finish_reason: null }],
-            });
-            emittedText = true;
-          }
+        }
+      }
+      if (emittedToolCallIds.size === 0) {
+        const terminalText = response.output
+          .map((item) => itemDelta(item, toolIndex)?.content ?? "")
+          .join("");
+        const content = unwrapNonToolCallEnvelope(
+          streamedText || terminalText,
+        );
+        if (content) {
+          writeSse(res, {
+            id,
+            object: "chat.completion.chunk",
+            created,
+            model: model.id,
+            choices: [
+              { index: 0, delta: { content }, finish_reason: null },
+            ],
+          });
         }
       }
       debug("response", {
