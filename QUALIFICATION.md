@@ -112,12 +112,17 @@ This route remains unqualified. Its frozen target tuple is:
 
 The harness requires explicit operator approval of the corpus hash before it starts the adapter or
 executes a model request. It preserves first attempts, requires explicit retry IDs, records
-provider terminal reasons, and rejects missing provider telemetry. Do not add this tuple to
-`approved-routes.json` from harness code or partial results.
+provider terminal reasons, and rejects missing provider telemetry. Before each attempt it
+revalidates the entire corpus and executes an attempt-local source snapshot whose normalized hash
+must match the approved corpus receipt. The final report re-grades raw stdout and telemetry rather
+than trusting copied gate fields. Do not add this tuple to `approved-routes.json` from harness code
+or partial results.
 
 The runner pins a concrete copy of the executable-reported Copilot CLI binary for the duration of
 one qualification. The Windows app-execution alias is not used for child launches because it can
-advance to a newer CLI build during a long serial run.
+advance to a newer CLI build during a long serial run. The environment receipt also records
+effective Foundry cache and native-library overrides and hashes the native runtime used by the
+adapter.
 
 The first public n=20 run used an exact natural-language `missing_input` string and was held after
 0/20 lexical matches despite 20/20 blocked/null, correctly cited, non-fabricated results. That
@@ -129,6 +134,10 @@ source does not contain the code or canonical description.
 This semantic corpus measures abstention and missing-evidence classification. It is not evidence
 that the route can distinguish answerable tasks from unanswerable ones; positive staged canaries
 remain a separate prerequisite.
+
+The frozen semantic result for issue #5 remains 13/20 and `HOLD`. Harness-integrity fixes do not
+reinterpret or rerun that evidence. A future qualification requires a new prospectively approved
+corpus version after the semantic, raw-markup, and native shutdown blockers are addressed.
 
 ## Not qualified
 

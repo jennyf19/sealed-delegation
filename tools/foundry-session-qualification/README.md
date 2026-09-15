@@ -30,19 +30,27 @@ it.
 
 ## 2. Run deterministic failure injection
 
-This command uses local fault servers and synthetic receipts; it does not start the model:
+Run this after `environment.json` exists. It uses local fault adapters instead of the model, but
+executes every case through the real launcher, staged workspace, adapter protocol, provider
+telemetry, attempt receipt, and grader:
 
 ```powershell
+pwsh tools\foundry-session-qualification\environment-receipt.ps1 `
+  -RepositoryRoot . `
+  -ManifestPath tools\foundry-session-qualification\corpus\manifest.json `
+  -OutputPath results\session-qualification-semantic\environment.json
+
 node tools\foundry-session-qualification\failure-injection.mjs `
   --manifest tools\foundry-session-qualification\corpus\manifest.json `
+  --environment results\session-qualification-semantic\environment.json `
   --output results\session-qualification-semantic\failure-injection
 ```
 
 The original ten route-failure cases plus three semantic-contract cases must report
 `gate_accepted=false`, `authority_advanced=false`, and a non-success failure-injection exit.
-Transport failures are exercised against ephemeral loopback servers. SDK `length` and `error`
-observability is also covered by
-`tools\foundry-session-probe\adapter.test.mjs`.
+The command refuses to overwrite prior evidence. Transport failures, SDK terminal reasons, malformed
+outputs, and timeout behavior are exercised against ephemeral loopback fault adapters. Static
+adapter behavior is also covered by `tools\foundry-session-probe\adapter.test.mjs`.
 
 ## 3. Run the serial corpus after approval
 
@@ -54,7 +62,10 @@ npm install --prefix tools\foundry-session-probe
 
 Do not set `FOUNDRY_LOCAL_SKIP_INSTALL` unless `FOUNDRY_LIBRARY_PATH` already points to a reviewed
 native runtime. The SDK package's Node addon is not sufficient without its platform ONNX Runtime
-libraries.
+libraries. The environment receipt records the effective model-cache and native-library paths,
+whether environment overrides supplied them, and a file-by-file hash plus aggregate tree hash for
+the effective native runtime. `FOUNDRY_LOCAL_SKIP_INSTALL` without an explicit library path is
+rejected.
 
 Commit the harness first so the environment receipt can require a clean worktree. Then pass the
 exact hash JM approved:
@@ -72,11 +83,15 @@ The runner:
 - copies the concrete Copilot executable into the results root and records its SHA-256, preventing
   an app-alias auto-update from changing the child binary mid-run;
 - starts the Session adapter on an ephemeral loopback port;
-- stages one fixture and invokes `local-agent-delegation` with the frozen tuple;
+- revalidates the complete approved corpus immediately before every attempt;
+- snapshots the approved fixture inside the attempt directory, verifies its normalized hash against
+  the approved corpus receipt, and asks the launcher to stage that immutable snapshot;
+- invokes `local-agent-delegation` with the frozen tuple;
 - writes `attempt.json` before launching each child;
 - captures provider terminal reasons and token usage without prompts or response content;
 - writes `gate.json` for every attempt;
-- closes and unloads the adapter in `finally`;
+- cancels and drains active requests and disposes their sessions before unloading the model and
+  manager in `finally`;
 - writes `analysis.json`.
 
 The runner never silently retries. Resume skips every fixture with an existing attempt:
@@ -128,6 +143,11 @@ node tools\foundry-session-qualification\report.mjs `
   --threat-review results\session-qualification-semantic\threat-review.json
 ```
 
-The report rejects attempts from another corpus hash or gate schema, so the lexical v1 evidence and
-semantic v2 evidence cannot be mixed. JM owns the final `PROMOTE`, `HOLD`, or `REJECT` decision.
-Promotion, if authorized, belongs in a separate PR.
+The report reads launcher stdout and provider telemetry again, independently re-runs the grader, and
+verifies fixture, attempt, run, corpus, source, staged-input, and gate links. A copied or stale
+`gate.json` cannot improve the report. It also rejects attempts from another corpus hash or gate
+schema, so the lexical v1 evidence and semantic v2 evidence cannot be mixed. JM owns the final
+`PROMOTE`, `HOLD`, or `REJECT` decision. Promotion, if authorized, belongs in a separate PR.
+
+Harness hardening never changes or reruns a previously frozen qualification result. Any changed
+prompt, gate, runtime, or corpus requires a new prospectively approved corpus version.

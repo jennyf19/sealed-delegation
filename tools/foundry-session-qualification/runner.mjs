@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import {
   appendFileSync,
   copyFileSync,
@@ -7,16 +7,15 @@ import {
   readFileSync,
   readdirSync,
   statSync,
-  writeFileSync,
 } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { executeLauncherAttempt } from "./attempt-execution.mjs";
 import {
   TARGET_ROUTE,
-  gradeAttempt,
+  findCorpusFileReceipt,
   loadCorpus,
-  renderTask,
   validateCorpus,
   writeJson,
 } from "./qualification-lib.mjs";
@@ -46,31 +45,6 @@ function existingAttempts(fixtureRoot) {
     .filter((name) => /^attempt-\d{3}$/.test(name))
     .sort()
     .map(attemptNumber);
-}
-
-function runProcess(file, args, { cwd, timeoutMs } = {}) {
-  return new Promise((resolvePromise) => {
-    const child = spawn(file, args, {
-      cwd,
-      windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    let stdout = "";
-    let stderr = "";
-    let killedForTimeout = false;
-    const timer = timeoutMs
-      ? setTimeout(() => {
-          killedForTimeout = true;
-          child.kill();
-        }, timeoutMs)
-      : null;
-    child.stdout.on("data", (chunk) => { stdout += chunk; });
-    child.stderr.on("data", (chunk) => { stderr += chunk; });
-    child.on("close", (code, signal) => {
-      if (timer) clearTimeout(timer);
-      resolvePromise({ code, signal, stdout, stderr, killedForTimeout });
-    });
-  });
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -169,6 +143,7 @@ if (environmentExists) {
     foundry_cli: receipt.foundry_cli,
     foundry_sdk: receipt.foundry_sdk,
     model_cache: receipt.model_cache,
+    runtime_paths: receipt.runtime_paths,
     corpus_sha256: receipt.corpus.corpus_sha256,
     file_hashes: receipt.file_hashes,
   });
@@ -262,9 +237,8 @@ const adapter = await startAdapter({
   host: "127.0.0.1",
   port: 0,
   modelAlias: environment.model_cache.alias,
-  modelCacheDir: process.env.FOUNDRY_MODEL_CACHE ??
-    environment.foundry_cli.cache_location,
-  libraryPath: process.env.FOUNDRY_LIBRARY_PATH,
+  modelCacheDir: environment.runtime_paths.model_cache.effective_path,
+  libraryPath: environment.runtime_paths.native_library.effective_path,
   recordEvent,
 });
 if (adapter.model.id !== TARGET_ROUTE.model) {
@@ -316,9 +290,20 @@ process.once("SIGTERM", handleSignal);
 try {
   for (const plan of executionPlan) {
     const { fixture, fixtureRoot, explicitlyRetried, number } = plan;
+    const executionCorpus = validateCorpus(manifestPath);
+    if (!executionCorpus.valid ||
+        executionCorpus.corpus_sha256 !== approvedHash ||
+        JSON.stringify(executionCorpus.files) !== JSON.stringify(environment.corpus.files)) {
+      throw new Error(
+        `${fixture.id}: corpus changed after approval; refusing to execute.`,
+      );
+    }
+    const approvedSource = findCorpusFileReceipt(environment.corpus, fixture.source);
+    if (!approvedSource) {
+      throw new Error(`${fixture.id}: approved corpus has no source receipt.`);
+    }
     mkdirSync(fixtureRoot, { recursive: true });
     const attemptRoot = join(fixtureRoot, `attempt-${String(number).padStart(3, "0")}`);
-    mkdirSync(attemptRoot);
     const providerPath = join(attemptRoot, "provider-events.jsonl");
     activeAttemptContext = {
       fixture_id: fixture.id,
@@ -326,92 +311,27 @@ try {
       provider_path: providerPath,
     };
     const sourcePath = resolve(dirname(manifestPath), fixture.source);
-    const task = renderTask(promptTemplate, fixture, basename(sourcePath));
-    const launcherRoot = join(attemptRoot, "launcher-runs");
-    mkdirSync(launcherRoot);
-    const attemptPath = join(attemptRoot, "attempt.json");
-    const attempt = {
-      schema_version: "sealed-delegation/session-qualification-attempt/v1",
-      fixture_id: fixture.id,
-      attempt_number: number,
-      retry_reason: explicitlyRetried ? "explicit_operator_retry" : null,
-      started_at: new Date().toISOString(),
-      status: "STARTED",
-      corpus_sha256: approvedHash,
-      source_path: sourcePath,
-      source_citation: fixture.source_citation,
-      expected: fixture.expected,
-      route: TARGET_ROUTE,
-      authority_advanced: false,
-    };
-    writeJson(attemptPath, attempt);
-
-    const launcherResult = await runProcess(
-      "pwsh",
-      [
-        "-NoProfile",
-        "-File", launcher,
-        "-Task", task,
-        "-WorkingDirectory", repoRoot,
-        "-InputPaths", sourcePath,
-        "-Profile", TARGET_ROUTE.profile,
-        "-TaskMode", TARGET_ROUTE.task_mode,
-        "-RuntimeId", TARGET_ROUTE.runtime,
-        "-Model", TARGET_ROUTE.model,
-        "-FoundryAlias", environment.model_cache.alias,
-        "-MaxPromptTokens", String(TARGET_ROUTE.max_prompt_tokens),
-        "-MaxOutputTokens", "256",
-        "-Stream", TARGET_ROUTE.stream,
-        "-BaseUrl", adapter.baseUrl,
-        "-AllowUnqualifiedRoute",
-        "-TimeoutSeconds", String(timeoutSeconds),
-        "-RunRoot", launcherRoot,
-        "-CopilotExecutable", pinnedCopilot,
-      ],
-      { cwd: repoRoot },
-    );
-    activeAttemptContext = null;
-    writeFileSync(join(attemptRoot, "launcher-wrapper-stdout.txt"), launcherResult.stdout);
-    writeFileSync(join(attemptRoot, "launcher-wrapper-stderr.txt"), launcherResult.stderr);
-    const runDirectories = readdirSync(launcherRoot).sort();
-    const runPath = runDirectories.length === 1
-      ? join(launcherRoot, runDirectories[0], "run.json")
-      : null;
-    const run = runPath && existsSync(runPath)
-      ? JSON.parse(readFileSync(runPath, "utf8"))
-      : null;
-    const raw = run?.stdout_path && existsSync(run.stdout_path)
-      ? readFileSync(run.stdout_path, "utf8")
-      : "";
-    const providerEvents = existsSync(providerPath)
-      ? readFileSync(providerPath, "utf8")
-          .split(/\r?\n/)
-          .filter(Boolean)
-          .map((line) => JSON.parse(line))
-      : [];
-    const gate = {
-      ...gradeAttempt({
+    try {
+      await executeLauncherAttempt({
+        attemptRoot,
         fixture,
-        run,
-        raw,
-        providerEvents,
-        environment,
         attemptNumber: number,
-      }),
-      gated_at: new Date().toISOString(),
-      attempt_directory: attemptRoot,
-    };
-    writeJson(join(attemptRoot, "gate.json"), gate);
-    writeJson(attemptPath, {
-      ...attempt,
-      finished_at: new Date().toISOString(),
-      status: gate.gate_accepted ? "GATE_ACCEPTED" : "GATE_REJECTED",
-      launcher_exit_code: launcherResult.code,
-      launcher_receipt: runPath,
-      gate_receipt: join(attemptRoot, "gate.json"),
-      failure_reasons: gate.failure_reasons,
-      authority_advanced: false,
-    });
+        retryReason: explicitlyRetried ? "explicit_operator_retry" : null,
+        sourcePath,
+        approvedSource,
+        promptTemplate,
+        repoRoot,
+        launcherPath: launcher,
+        baseUrl: adapter.baseUrl,
+        modelAlias: environment.model_cache.alias,
+        pinnedCopilot,
+        timeoutSeconds,
+        environment,
+        approvedCorpus: environment.corpus,
+      });
+    } finally {
+      activeAttemptContext = null;
+    }
   }
 } catch (error) {
   interrupted = true;

@@ -78,12 +78,69 @@ function Get-HashReceipt([string]$Path) {
     }
 }
 
+function Get-BinaryTreeReceipt([string]$Path) {
+    $resolved = (Resolve-Path -LiteralPath $Path -ErrorAction Stop).Path
+    if (-not (Get-Item -LiteralPath $resolved).PSIsContainer) {
+        throw "Native runtime path is not a directory: $resolved"
+    }
+    $files = @(Get-ChildItem -LiteralPath $resolved -Recurse -File |
+        Sort-Object FullName |
+        ForEach-Object {
+            [ordered]@{
+                path = [System.IO.Path]::GetRelativePath($resolved, $_.FullName).Replace('\', '/')
+                sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+                size_bytes = $_.Length
+            }
+        })
+    if ($files.Count -eq 0) {
+        throw "Native runtime path contains no files: $resolved"
+    }
+    $hashMaterial = ($files | ForEach-Object { "$($_.path)`0$($_.sha256)" }) -join "`n"
+    $treeHash = [Convert]::ToHexString(
+        [System.Security.Cryptography.SHA256]::HashData(
+            [System.Text.Encoding]::UTF8.GetBytes($hashMaterial)
+        )
+    ).ToLowerInvariant()
+    return [ordered]@{
+        path = $resolved
+        tree_sha256 = $treeHash
+        file_count = $files.Count
+        files = $files
+    }
+}
+
 $copilotExecutable = Get-NativeCopilot
 $copilotVersion = Get-CommandOutput $copilotExecutable @("--version")
 $foundryExecutable = (Get-Command foundry -CommandType Application -ErrorAction Stop).Source
 $foundryVersion = Get-CommandOutput $foundryExecutable @("--version")
 $cacheLocation = Get-CommandOutput $foundryExecutable @("cache", "location", "-o", "json") |
     ConvertFrom-Json
+$modelCacheOverride = $env:FOUNDRY_MODEL_CACHE
+$libraryPathOverride = $env:FOUNDRY_LIBRARY_PATH
+$skipInstallOverride = $env:FOUNDRY_LOCAL_SKIP_INSTALL
+$effectiveModelCache = if ([string]::IsNullOrWhiteSpace($modelCacheOverride)) {
+    (Resolve-Path -LiteralPath $cacheLocation.path -ErrorAction Stop).Path
+} else {
+    (Resolve-Path -LiteralPath $modelCacheOverride -ErrorAction Stop).Path
+}
+if (-not [string]::IsNullOrWhiteSpace($modelCacheOverride) -and
+    [System.IO.Path]::GetFullPath($cacheLocation.path).TrimEnd('\') -ine
+        [System.IO.Path]::GetFullPath($effectiveModelCache).TrimEnd('\')) {
+    throw "Foundry CLI cache location does not match FOUNDRY_MODEL_CACHE."
+}
+$nodePlatform = Get-CommandOutput "node" @("-p", "process.platform + '-' + process.arch")
+$sdkRoot = Join-Path $adapterRoot "node_modules\foundry-local-sdk"
+$defaultLibraryPath = Join-Path $sdkRoot "prebuilds\$nodePlatform"
+$effectiveLibraryPath = if ([string]::IsNullOrWhiteSpace($libraryPathOverride)) {
+    (Resolve-Path -LiteralPath $defaultLibraryPath -ErrorAction Stop).Path
+} else {
+    (Resolve-Path -LiteralPath $libraryPathOverride -ErrorAction Stop).Path
+}
+if (-not [string]::IsNullOrWhiteSpace($skipInstallOverride) -and
+    [string]::IsNullOrWhiteSpace($libraryPathOverride)) {
+    throw "FOUNDRY_LOCAL_SKIP_INSTALL requires an explicit FOUNDRY_LIBRARY_PATH."
+}
+$nativeRuntime = Get-BinaryTreeReceipt $effectiveLibraryPath
 $cachedModels = Get-CommandOutput $foundryExecutable @(
     "model", "list", "--cached", "--variants",
     "--search", "qwen2.5-7b-instruct-generic-gpu", "-o", "json"
@@ -116,15 +173,19 @@ $filesToHash = @(
     $manifest
     (Join-Path $qualificationRoot "prompt-template.txt")
     (Join-Path $qualificationRoot "runner.mjs")
+    (Join-Path $qualificationRoot "attempt-execution.mjs")
     (Join-Path $qualificationRoot "grader.mjs")
     (Join-Path $qualificationRoot "qualification-lib.mjs")
+    (Join-Path $qualificationRoot "failure-injection-lib.mjs")
     (Join-Path $qualificationRoot "failure-injection.mjs")
+    (Join-Path $qualificationRoot "report.mjs")
+    (Join-Path $qualificationRoot "environment-receipt.ps1")
     (Join-Path $adapterRoot "adapter.mjs")
     (Join-Path $repoRoot ".github\skills\local-agent-delegation\scripts\invoke_local_agent.ps1")
 )
 
 $receipt = [ordered]@{
-    schema_version = "sealed-delegation/session-environment/v1"
+    schema_version = "sealed-delegation/session-environment/v2"
     recorded_at = (Get-Date).ToUniversalTime().ToString("o")
     repository = [ordered]@{
         root = $repoRoot
@@ -157,6 +218,20 @@ $receipt = [ordered]@{
         package_lock = $packageLockPath
     }
     model_cache = $targetModel
+    runtime_paths = [ordered]@{
+        model_cache = [ordered]@{
+            effective_path = $effectiveModelCache
+            override_present = -not [string]::IsNullOrWhiteSpace($modelCacheOverride)
+            override_value = $(if ([string]::IsNullOrWhiteSpace($modelCacheOverride)) { $null } else { $modelCacheOverride })
+        }
+        native_library = [ordered]@{
+            effective_path = $effectiveLibraryPath
+            override_present = -not [string]::IsNullOrWhiteSpace($libraryPathOverride)
+            override_value = $(if ([string]::IsNullOrWhiteSpace($libraryPathOverride)) { $null } else { $libraryPathOverride })
+            skip_install_override = $(if ([string]::IsNullOrWhiteSpace($skipInstallOverride)) { $null } else { $skipInstallOverride })
+            runtime = $nativeRuntime
+        }
+    }
     adapter = [ordered]@{
         bind_address = "127.0.0.1"
         port = 0

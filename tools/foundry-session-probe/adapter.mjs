@@ -226,9 +226,11 @@ async function handleCompletion(
     createSession = (selectedModel) => new ChatSession(selectedModel),
     createRequest = () => new Request(),
     recordEvent = recordProviderEvent,
+    registerOperation = () => () => {},
   } = {},
 ) {
   const session = createSession(model);
+  let unregisterOperation = () => {};
   try {
     debug("request", {
       stream: Boolean(body.stream),
@@ -239,6 +241,15 @@ async function handleCompletion(
     addOpenAiTools(session, body.tools, body.tool_choice);
     const request = addOpenAiMessages(createRequest(), body.messages);
     request.setOptions(toRequestOptions(body));
+    const abortController = new AbortController();
+    unregisterOperation = registerOperation({
+      requestId,
+      session,
+      cancel() {
+        abortController.abort();
+        request.cancel?.();
+      },
+    });
 
     const id = completionId();
     const created = Math.floor(Date.now() / 1000);
@@ -257,7 +268,9 @@ async function handleCompletion(
         choices: [{ index: 0, delta: { role: "assistant" }, finish_reason: null }],
       });
 
-      const stream = session.processStreamingRequest(request);
+      const stream = session.processStreamingRequest(request, {
+        signal: abortController.signal,
+      });
       let toolIndex = 0;
       const outputTypes = [];
       let streamedText = "";
@@ -421,6 +434,7 @@ async function handleCompletion(
       }),
     );
   } finally {
+    unregisterOperation();
     session.dispose();
   }
 }
@@ -440,76 +454,94 @@ export async function startAdapterServer({
   }
   if (!model?.id) throw new Error("The Session adapter requires a resolved model.");
 
+  let closing = false;
+  let closePromise = null;
+  const activeHandlers = new Set();
+  const activeOperations = new Map();
   const acceptedModels = new Set([
     ...acceptedModelIds,
     model.id,
     model.id.split(":")[0],
   ]);
-  const server = http.createServer(async (req, res) => {
-    const requestId = completionId();
-    try {
-      const path = new URL(req.url, `http://${req.headers.host}`).pathname;
-      if (req.method === "GET" && path === "/v1/models") {
-        res.writeHead(200, { "content-type": "application/json" });
-        res.end(
-          JSON.stringify({
-            object: "list",
-            data: [{ id: model.id, object: "model", owned_by: "foundry-local" }],
-          }),
-        );
-        return;
-      }
-      if (req.method === "POST" && path === "/v1/chat/completions") {
-        const body = await readJson(req);
-        if (!acceptedModels.has(body.model)) {
+  const server = http.createServer((req, res) => {
+    const handler = (async () => {
+      const requestId = completionId();
+      try {
+        if (closing) {
+          res.writeHead(503, { "content-type": "application/json" });
+          res.end(JSON.stringify({ error: { message: "Adapter is shutting down." } }));
+          return;
+        }
+        const path = new URL(req.url, `http://${req.headers.host}`).pathname;
+        if (req.method === "GET" && path === "/v1/models") {
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(
+            JSON.stringify({
+              object: "list",
+              data: [{ id: model.id, object: "model", owned_by: "foundry-local" }],
+            }),
+          );
+          return;
+        }
+        if (req.method === "POST" && path === "/v1/chat/completions") {
+          const body = await readJson(req);
+          if (!acceptedModels.has(body.model)) {
+            recordEvent({
+              event: "request_rejected",
+              request_id: requestId,
+              requested_model: body.model,
+              resolved_model: model.id,
+              reason: "unrecognized_model",
+            });
+            res.writeHead(400, { "content-type": "application/json" });
+            res.end(JSON.stringify({ error: { message: "Unrecognized model." } }));
+            return;
+          }
           recordEvent({
-            event: "request_rejected",
+            event: "request_started",
             request_id: requestId,
             requested_model: body.model,
             resolved_model: model.id,
-            reason: "unrecognized_model",
+            stream: Boolean(body.stream),
           });
-          res.writeHead(400, { "content-type": "application/json" });
-          res.end(JSON.stringify({ error: { message: "Unrecognized model." } }));
+          await handleCompletion(res, model, body, {
+            requestId,
+            createSession,
+            createRequest,
+            recordEvent,
+            registerOperation(operation) {
+              activeOperations.set(requestId, operation);
+              if (closing) operation.cancel();
+              return () => activeOperations.delete(requestId);
+            },
+          });
           return;
         }
+        res.writeHead(404, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: { message: "Not found." } }));
+      } catch (error) {
         recordEvent({
-          event: "request_started",
+          event: "request_failed",
           request_id: requestId,
-          requested_model: body.model,
           resolved_model: model.id,
-          stream: Boolean(body.stream),
+          finish_reason: error?.foundryFinishReason ?? null,
+          headers_sent: res.headersSent,
+          error: error instanceof Error ? error.message : String(error),
         });
-        await handleCompletion(res, model, body, {
-          requestId,
-          createSession,
-          createRequest,
-          recordEvent,
-        });
-        return;
+        if (res.headersSent) {
+          res.destroy(error instanceof Error ? error : new Error(String(error)));
+          return;
+        }
+        res.writeHead(500, { "content-type": "application/json" });
+        res.end(
+          JSON.stringify({
+            error: { message: error instanceof Error ? error.message : String(error) },
+          }),
+        );
       }
-      res.writeHead(404, { "content-type": "application/json" });
-      res.end(JSON.stringify({ error: { message: "Not found." } }));
-    } catch (error) {
-      recordEvent({
-        event: "request_failed",
-        request_id: requestId,
-        resolved_model: model.id,
-        finish_reason: error?.foundryFinishReason ?? null,
-        headers_sent: res.headersSent,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      if (res.headersSent) {
-        res.destroy(error instanceof Error ? error : new Error(String(error)));
-        return;
-      }
-      res.writeHead(500, { "content-type": "application/json" });
-      res.end(
-        JSON.stringify({
-          error: { message: error instanceof Error ? error.message : String(error) },
-        }),
-      );
-    }
+    })();
+    activeHandlers.add(handler);
+    handler.finally(() => activeHandlers.delete(handler));
   });
 
   await new Promise((resolve, reject) => {
@@ -523,18 +555,48 @@ export async function startAdapterServer({
     baseUrl,
     model,
     async close() {
-      server.closeIdleConnections?.();
-      await new Promise((resolve, reject) => {
-        const forceTimer = setTimeout(() => {
-          server.closeAllConnections?.();
-        }, 2000);
-        server.close((error) => {
-          clearTimeout(forceTimer);
-          if (error) reject(error);
-          else resolve();
+      if (closePromise) return closePromise;
+      closePromise = (async () => {
+        closing = true;
+        const serverClosed = new Promise((resolvePromise, reject) => {
+          server.close((error) => {
+            if (error) reject(error);
+            else resolvePromise();
+          });
         });
-      });
-      await onClose();
+        server.closeIdleConnections?.();
+        for (const [requestId, operation] of activeOperations) {
+          try {
+            operation.cancel();
+          } catch (error) {
+            recordEvent({
+              event: "request_cancel_failed",
+              request_id: requestId,
+              resolved_model: model.id,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+        const drained = Promise.allSettled([...activeHandlers]);
+        let drainTimer;
+        const drainResult = await Promise.race([
+          drained.then(() => "drained"),
+          new Promise((resolvePromise) => {
+            drainTimer = setTimeout(() => resolvePromise("timeout"), 10000);
+          }),
+        ]).finally(() => clearTimeout(drainTimer));
+        if (drainResult !== "drained") {
+          server.closeAllConnections?.();
+          await serverClosed.catch(() => {});
+          throw new Error(
+            `Timed out draining ${activeHandlers.size} active adapter request(s).`,
+          );
+        }
+        server.closeIdleConnections?.();
+        await serverClosed;
+        await onClose();
+      })();
+      return closePromise;
     },
   };
 }

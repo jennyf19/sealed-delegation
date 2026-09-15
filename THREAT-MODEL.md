@@ -50,14 +50,15 @@ whose output is always untrusted, and accepts nothing until an independent gate 
 | T6 | Poisoned model/runtime | Version tuple and preflight; all output untrusted | Qualification and preflight | Model weights are not independently verified |
 | T7 | Compromised Copilot binary | Version pin and re-preflight on changes | README and policy | **Largest residual:** binary runs fully trusted as the OS user |
 | T8 | Shim port abuse | Loopback bind; start late, stop early | Shim and operating procedure | Same-user process can reach the port while open |
-| T9 | Receipt tampering | Chained task, input, stdout, and stderr hashes | Launcher | Receipts are unsigned and assume host integrity |
+| T9 | Receipt tampering or stale derived gates | Chained task/input/output hashes; report re-grades raw stdout and telemetry and validates fixture/attempt/run/corpus links | Launcher, qualification grader, and report tests | Receipts are unsigned and assume host integrity |
 | T10 | Secret pasted into task text | Pre-launch secret-pattern screen; explicit high-risk override | Launcher and policy test | Pattern matching cannot detect every secret |
 | T11 | Hung or looping child | Hard timeout and process-tree termination | Launcher | Long but progressing runs can still be expensive in wall time |
 | T12 | Unapproved or policy-banned model is selected | Fail-closed exact runtime/model/profile/budget allowlist; explicit override recorded as unqualified | Route policy in launcher, preflight, and sealed demo; PowerShell and Node tests | Runtime/model labels are configuration claims, not cryptographic attestation of weights |
 | T13 | Embedded SDK terminal failure is hidden behind plausible partial output | Adapter records per-request terminal reason and the qualification gate rejects `length`, `error`, missing telemetry, and a final reason other than `stop` | Session adapter telemetry and qualification grader tests | The SDK and native execution provider remain trusted to report their own terminal state honestly |
-| T14 | Session adapter port remains reachable longer than required | Ephemeral loopback bind; runner starts immediately before serial execution and closes in `finally`; lifecycle receipt records closure | Session qualification runner and adapter loopback test | Other same-user processes can reach the port during the bounded run |
-| T15 | Adapter or embedded native runtime processes untrusted staged content | Prompts and staged files remain bounded by the launcher; only `view` is exposed; output remains untrusted and independently graded | Launcher, adapter, deterministic grader | The embedded SDK/native provider runs as the OS user without an OS sandbox |
+| T14 | Session adapter port remains reachable longer than required, or native resources are disposed while requests remain active | Ephemeral loopback bind; shutdown rejects new work, cancels and drains active requests, disposes sessions, then unloads the model and manager; lifecycle receipt records closure | Session qualification runner and adapter lifecycle tests | Other same-user processes can reach the port during the bounded run; a native SDK defect can still crash during orderly teardown |
+| T15 | Adapter or embedded native runtime processes untrusted staged content | Prompts and staged files remain bounded by the launcher; only `view` is exposed; output remains untrusted and independently graded; effective cache/library paths and native runtime hashes are recorded | Launcher, environment receipt, adapter, deterministic grader | The embedded SDK/native provider runs as the OS user without an OS sandbox |
 | T16 | A semantic grader is tuned after observing model prose | Meaning is represented by a frozen code selected from three predeclared alternatives; code positions are balanced; corpus hash approval precedes execution | Corpus validator, prompt template, deterministic grader | The alternatives themselves require human review before freezing |
+| T17 | Corpus is validated and then changed before the launcher stages it | Revalidate the full corpus before each attempt; copy the source into the attempt; bind its raw and normalized hashes through the launcher receipt and report | Qualification runner, grader, and report tests | Host compromise can still alter code and receipts together |
 
 ## Explicit non-goals
 
@@ -82,7 +83,9 @@ whose output is always untrusted, and accepts nothing until an independent gate 
 | Approved-route enforcement | `test_policy.ps1` and `route-policy.test.mjs` |
 | Shim repair and de-duplication | `foundry-stream-shim.test.mjs` |
 | Session SDK terminal-reason telemetry | `foundry-session-probe/adapter.test.mjs` |
+| Session shutdown request draining | `foundry-session-probe/adapter.test.mjs` |
 | Session corpus and fail-closed grader | `foundry-session-qualification/qualification.test.mjs` |
+| Qualification artifact re-grading and linkage | `foundry-session-qualification/qualification.test.mjs` |
 
 ## Review rule
 

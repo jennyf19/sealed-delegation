@@ -580,10 +580,23 @@ try {
     $completed = $process.WaitForExit($TimeoutSeconds * 1000)
     if (-not $completed) {
         $process.Kill($true)
-        $process.WaitForExit()
+        $terminated = $process.WaitForExit(5000)
+        if (-not $terminated) {
+            throw "Timed-out Copilot process did not terminate within 5 seconds."
+        }
+        $streamsDrained = [System.Threading.Tasks.Task]::WaitAll(
+            [System.Threading.Tasks.Task[]]@($stdoutTask, $stderrTask),
+            5000
+        )
+        if (-not $streamsDrained) {
+            $stdout = ""
+            $stderr = "Timed-out Copilot process left inherited output handles open."
+        }
     }
-    $stdout = $stdoutTask.GetAwaiter().GetResult()
-    $stderr = $stderrTask.GetAwaiter().GetResult()
+    if ($completed -or $streamsDrained -eq $true) {
+        $stdout = $stdoutTask.GetAwaiter().GetResult()
+        $stderr = $stderrTask.GetAwaiter().GetResult()
+    }
     $stdout | Set-Content $stdoutPath -Encoding utf8
     $stderr | Set-Content $stderrPath -Encoding utf8
 } finally {

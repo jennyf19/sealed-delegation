@@ -269,3 +269,56 @@ test("rejects and records a wrong model id", async () => {
     await adapter.close();
   }
 });
+
+test("cancels and drains active sessions before model shutdown", async () => {
+  const lifecycle = [];
+  let rejectRequest;
+  let markStarted;
+  const started = new Promise((resolve) => { markStarted = resolve; });
+  const request = {
+    addItem() { return this; },
+    setOptions() { return this; },
+    cancel() {
+      lifecycle.push("request-cancelled");
+      rejectRequest(new Error("cancelled for shutdown"));
+    },
+  };
+  const session = {
+    addToolDefinition() {},
+    processRequest() {
+      markStarted();
+      return new Promise((resolve, reject) => {
+        rejectRequest = reject;
+      });
+    },
+    dispose() {
+      lifecycle.push("session-disposed");
+    },
+  };
+  const adapter = await startAdapterServer({
+    model: { id: "qwen2.5-7b-instruct-generic-gpu:4" },
+    createSession: () => session,
+    createRequest: () => request,
+    onClose: async () => {
+      lifecycle.push("model-unloaded");
+    },
+  });
+  const responsePromise = fetch(`${adapter.baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      model: "qwen2.5-7b-instruct-generic-gpu:4",
+      stream: false,
+      messages: [],
+    }),
+  });
+  await started;
+  await adapter.close();
+  const response = await responsePromise;
+  assert.equal(response.status, 500);
+  assert.deepEqual(lifecycle, [
+    "request-cancelled",
+    "session-disposed",
+    "model-unloaded",
+  ]);
+});

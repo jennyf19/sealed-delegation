@@ -5,6 +5,7 @@ import {
   gradeAttempt,
   loadCorpus,
   readJsonLines,
+  validateCorpus,
   writeJson,
 } from "./qualification-lib.mjs";
 
@@ -18,12 +19,14 @@ const fixtureId = valueAfter("--fixture");
 const runPathValue = valueAfter("--run");
 const providerPathValue = valueAfter("--provider-events");
 const environmentPathValue = valueAfter("--environment");
+const attemptPathValue = valueAfter("--attempt");
 const outputPath = resolve(valueAfter("--output") ?? "");
 const attemptNumberValue = valueAfter("--attempt-number");
-if (!manifestPath || !fixtureId || !outputPath) {
+if (!manifestPath || !fixtureId || !attemptPathValue || !outputPath) {
   throw new Error(
     "Usage: node grader.mjs --manifest <manifest> --fixture <id> " +
-    "--run <run.json> --provider-events <events.jsonl> --environment <receipt.json> --output <gate.json>",
+    "--attempt <attempt.json> --run <run.json> --provider-events <events.jsonl> " +
+    "--environment <receipt.json> --output <gate.json>",
   );
 }
 
@@ -40,6 +43,8 @@ const raw = run?.stdout_path && existsSync(run.stdout_path)
 const environment = environmentPathValue && existsSync(resolve(environmentPathValue))
   ? JSON.parse(readFileSync(resolve(environmentPathValue), "utf8"))
   : null;
+const attempt = JSON.parse(readFileSync(resolve(attemptPathValue), "utf8"));
+const approvedCorpus = environment?.corpus ?? validateCorpus(manifestPath);
 const providerEvents = providerPathValue
   ? readJsonLines(resolve(providerPathValue))
   : [];
@@ -51,6 +56,8 @@ const gate = {
     providerEvents,
     environment,
     attemptNumber: attemptNumberValue === null ? null : Number(attemptNumberValue),
+    attempt,
+    approvedCorpus,
   }),
   gated_at: new Date().toISOString(),
   gate_path: outputPath,
