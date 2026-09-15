@@ -23,13 +23,13 @@ test("accepts the pinned rehearsal candidate", () => {
 test("rejects a floating model revision", () => {
   const changed = structuredClone(candidate);
   changed.source.revision = "main";
-  assert.match(validateCandidate(changed).join("\n"), /source\.revision/);
+  assert.match(validateCandidate(changed).join("\n"), /source\/revision/);
 });
 
 test("rejects unreviewed remote code", () => {
   const changed = structuredClone(candidate);
   changed.source.requires_remote_code = true;
-  assert.match(validateCandidate(changed).join("\n"), /source\.requires_remote_code/);
+  assert.match(validateCandidate(changed).join("\n"), /source\/requires_remote_code/);
 });
 
 test("rejects conversion remote code", () => {
@@ -72,4 +72,13 @@ test("rejects lexical output traversal", () => {
   const changed = structuredClone(candidate);
   changed.artifact.output_directory = "results/byom/../../.git";
   assert.match(validateCandidate(changed).join("\n"), /results\/byom/);
+});
+
+test("rejects unknown properties and invalid tool entries from the schema", () => {
+  const changed = structuredClone(candidate);
+  changed.unknown = true;
+  changed.runtime.tools = [null];
+  const errors = validateCandidate(changed).join("\n");
+  assert.match(errors, /additional properties/);
+  assert.match(errors, /must be string/);
 });

@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import Ajv2020 from "ajv/dist/2020.js";
+import addFormats from "ajv-formats";
 
 const SHA_PATTERN = /^[0-9a-f]{40}$/;
 const CANDIDATE_PATTERN = /^[a-z0-9][a-z0-9.-]+$/;
@@ -18,6 +20,12 @@ const PROVIDERS = new Set([
   "WebGpuExecutionProvider",
 ]);
 const PRECISIONS = new Set(["fp32", "fp16", "int8", "int4"]);
+const schema = JSON.parse(
+  readFileSync(new URL("./candidate.schema.json", import.meta.url), "utf8"),
+);
+const ajv = new Ajv2020({ allErrors: true, strict: true });
+addFormats(ajv);
+const validateSchema = ajv.compile(schema);
 
 function isNormalizedRelativePosixPath(value) {
   if (
@@ -53,6 +61,15 @@ function requireMatch(value, pattern, path, errors) {
 
 export function validateCandidate(candidate) {
   const errors = [];
+  if (!validateSchema(candidate)) {
+    errors.push(
+      ...validateSchema.errors.map(
+        (error) =>
+          `${error.instancePath || "/"} ${error.message ?? "is invalid"}`,
+      ),
+    );
+    return errors;
+  }
   if (!requireObject(candidate, "candidate", errors)) return errors;
   if (candidate.schema_version !== "sealed-delegation/byom-candidate/v1") {
     errors.push("schema_version must be sealed-delegation/byom-candidate/v1.");
