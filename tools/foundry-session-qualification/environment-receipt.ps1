@@ -7,7 +7,9 @@ param(
     [string]$ManifestPath,
 
     [Parameter(Mandatory = $true)]
-    [string]$OutputPath
+    [string]$OutputPath,
+
+    [string]$CopilotExecutable
 )
 
 $ErrorActionPreference = "Stop"
@@ -19,11 +21,19 @@ $packageLockPath = Join-Path $adapterRoot "package-lock.json"
 $policyPath = Join-Path $repoRoot ".github\skills\local-agent-delegation\references\approved-routes.json"
 
 function Get-NativeCopilot {
+    if ($CopilotExecutable) {
+        $resolved = (Resolve-Path -LiteralPath $CopilotExecutable -ErrorAction Stop).Path
+        if ((Get-Item -LiteralPath $resolved).Length -le 0) {
+            throw "The pinned Copilot executable is empty."
+        }
+        return $resolved
+    }
     $commands = @(Get-Command copilot -All -ErrorAction Stop)
     $native = $commands |
         Where-Object {
             $_.CommandType -eq "Application" -and
-                [System.IO.Path]::GetExtension($_.Source) -ieq ".exe"
+                [System.IO.Path]::GetExtension($_.Source) -ieq ".exe" -and
+                (Get-Item -LiteralPath $_.Source).Length -gt 0
         } |
         Select-Object -First 1
     if (-not $native) {
@@ -133,6 +143,7 @@ $receipt = [ordered]@{
     }
     copilot = [ordered]@{
         executable = $copilotExecutable
+        executable_sha256 = (Get-FileHash -LiteralPath $copilotExecutable -Algorithm SHA256).Hash.ToLowerInvariant()
         version_output = $copilotVersion
     }
     foundry_cli = [ordered]@{

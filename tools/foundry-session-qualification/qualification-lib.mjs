@@ -230,6 +230,10 @@ export function gradeAttempt({
         resolve(run.copilot_command) !== resolve(environment.copilot.executable)) {
       reasons.push("copilot_executable_mismatch");
     }
+    if (environment?.copilot?.executable_sha256 &&
+        run.copilot_command_sha256 !== environment.copilot.executable_sha256) {
+      reasons.push("copilot_executable_hash_mismatch");
+    }
     if (environment?.copilot?.version_output &&
         run.copilot_version_output !== environment.copilot.version_output) {
       reasons.push("copilot_version_mismatch");

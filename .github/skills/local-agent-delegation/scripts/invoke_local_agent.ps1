@@ -38,6 +38,7 @@ param(
     [int]$TimeoutSeconds = 900,
     [string]$RunRoot = $(Join-Path $HOME ".copilot\local-agent-runs"),
     [string]$RoutePolicyPath = $(Join-Path $PSScriptRoot "..\references\approved-routes.json"),
+    [string]$CopilotExecutable,
     [switch]$DryRun
 )
 
@@ -230,33 +231,44 @@ if (-not $DryRun) {
     }
 }
 
-$copilotCommands = @(Get-Command copilot -All -ErrorAction Stop)
-$copilotNative = $copilotCommands |
-    Where-Object {
-        if ($IsWindows) {
-            return $_.CommandType -eq "Application" -and
-                [System.IO.Path]::GetExtension($_.Source) -ieq ".exe"
-        }
-        return $_.CommandType -eq "Application" -and
-            [System.IO.Path]::GetExtension($_.Source) -notin @(".cmd", ".bat")
-    } |
-    Select-Object -First 1
-$copilotScript = $copilotCommands |
-    Where-Object { $_.Source.EndsWith(".ps1", [System.StringComparison]::OrdinalIgnoreCase) } |
-    Select-Object -First 1
-
-if ($copilotNative) {
-    $copilotCommand = $copilotNative.Source
-    $copilotLauncher = $copilotNative.Source
+if ($CopilotExecutable) {
+    $copilotCommand = (Resolve-Path -LiteralPath $CopilotExecutable -ErrorAction Stop).Path
+    if (-not (Test-Path -LiteralPath $copilotCommand -PathType Leaf)) {
+        throw "CopilotExecutable must resolve to a file."
+    }
+    $copilotLauncher = $copilotCommand
     [string[]]$copilotPrefixArguments = @()
-} elseif ($copilotScript) {
-    $pwsh = Get-Command pwsh -CommandType Application -ErrorAction Stop
-    $copilotCommand = $copilotScript.Source
-    $copilotLauncher = $pwsh.Source
-    [string[]]$copilotPrefixArguments = @("-NoProfile", "-File", $copilotScript.Source)
 } else {
-    throw "No directly executable Copilot CLI or PowerShell shim was found."
+    $copilotCommands = @(Get-Command copilot -All -ErrorAction Stop)
+    $copilotNative = $copilotCommands |
+        Where-Object {
+            if ($IsWindows) {
+                return $_.CommandType -eq "Application" -and
+                    [System.IO.Path]::GetExtension($_.Source) -ieq ".exe" -and
+                    (Get-Item -LiteralPath $_.Source).Length -gt 0
+            }
+            return $_.CommandType -eq "Application" -and
+                [System.IO.Path]::GetExtension($_.Source) -notin @(".cmd", ".bat")
+        } |
+        Select-Object -First 1
+    $copilotScript = $copilotCommands |
+        Where-Object { $_.Source.EndsWith(".ps1", [System.StringComparison]::OrdinalIgnoreCase) } |
+        Select-Object -First 1
+
+    if ($copilotNative) {
+        $copilotCommand = $copilotNative.Source
+        $copilotLauncher = $copilotNative.Source
+        [string[]]$copilotPrefixArguments = @()
+    } elseif ($copilotScript) {
+        $pwsh = Get-Command pwsh -CommandType Application -ErrorAction Stop
+        $copilotCommand = $copilotScript.Source
+        $copilotLauncher = $pwsh.Source
+        [string[]]$copilotPrefixArguments = @("-NoProfile", "-File", $copilotScript.Source)
+    } else {
+        throw "No directly executable Copilot CLI or PowerShell shim was found."
+    }
 }
+$copilotCommandSha256 = (Get-FileHash -LiteralPath $copilotCommand -Algorithm SHA256).Hash.ToLowerInvariant()
 $copilotVersionStartInfo = [System.Diagnostics.ProcessStartInfo]::new()
 $copilotVersionStartInfo.FileName = $copilotLauncher
 $copilotVersionStartInfo.UseShellExecute = $false
@@ -424,6 +436,7 @@ $metadata = [ordered]@{
     input_manifest_path = $(if ($stagedInputManifest.Count -gt 0) { $inputManifestPath } else { $null })
     staged_inputs = @($stagedInputManifest)
     copilot_command = $copilotCommand
+    copilot_command_sha256 = $copilotCommandSha256
     copilot_launcher = $copilotLauncher
     copilot_version_output = $copilotVersionOutput
     effective_task_path = $effectiveTaskPath

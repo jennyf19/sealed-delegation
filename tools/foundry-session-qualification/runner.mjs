@@ -1,10 +1,12 @@
 import { spawn, spawnSync } from "node:child_process";
 import {
   appendFileSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
   readdirSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
@@ -101,6 +103,25 @@ if (!approvedHash || approvedHash !== corpusValidation.corpus_sha256) {
 
 const { manifest, promptTemplate } = loadCorpus(manifestPath);
 mkdirSync(resultsRoot, { recursive: true });
+const pinnedRoot = join(resultsRoot, "pinned");
+const pinnedCopilot = join(pinnedRoot, "copilot.exe");
+if (!existsSync(pinnedCopilot)) {
+  const where = spawnSync("where.exe", ["copilot.exe"], {
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  const sourceCopilot = where.status === 0
+    ? where.stdout
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .find((candidate) => existsSync(candidate) && statSync(candidate).size > 0)
+    : null;
+  if (!sourceCopilot) {
+    throw new Error("Could not resolve a concrete non-alias Copilot executable to pin.");
+  }
+  mkdirSync(pinnedRoot, { recursive: true });
+  copyFileSync(sourceCopilot, pinnedCopilot);
+}
 const environmentPath = join(resultsRoot, "environment.json");
 const environmentExists = existsSync(environmentPath);
 const environmentCandidatePath = environmentExists
@@ -114,6 +135,7 @@ const environmentCommand = spawnSync(
     "-RepositoryRoot", repoRoot,
     "-ManifestPath", manifestPath,
     "-OutputPath", environmentCandidatePath,
+    "-CopilotExecutable", pinnedCopilot,
   ],
   { cwd: repoRoot, encoding: "utf8", windowsHide: true },
 );
@@ -344,6 +366,7 @@ try {
         "-AllowUnqualifiedRoute",
         "-TimeoutSeconds", String(timeoutSeconds),
         "-RunRoot", launcherRoot,
+        "-CopilotExecutable", pinnedCopilot,
       ],
       { cwd: repoRoot },
     );

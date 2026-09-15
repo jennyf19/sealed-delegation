@@ -115,6 +115,10 @@ executes a model request. It preserves first attempts, requires explicit retry I
 provider terminal reasons, and rejects missing provider telemetry. Do not add this tuple to
 `approved-routes.json` from harness code or partial results.
 
+The runner pins a concrete copy of the executable-reported Copilot CLI binary for the duration of
+one qualification. The Windows app-execution alias is not used for child launches because it can
+advance to a newer CLI build during a long serial run.
+
 The first public n=20 run used an exact natural-language `missing_input` string and was held after
 0/20 lexical matches despite 20/20 blocked/null, correctly cited, non-fabricated results. That
 evidence remains immutable. A subsequent corpus version replaces lexical equality with a frozen

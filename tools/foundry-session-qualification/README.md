@@ -69,6 +69,8 @@ The runner:
 
 - records the commit, tool versions, model cache metadata, hardware, adapter settings, and file
   hashes in `environment.json`;
+- copies the concrete Copilot executable into the results root and records its SHA-256, preventing
+  an app-alias auto-update from changing the child binary mid-run;
 - starts the Session adapter on an ephemeral loopback port;
 - stages one fixture and invokes `local-agent-delegation` with the frozen tuple;
 - writes `attempt.json` before launching each child;
