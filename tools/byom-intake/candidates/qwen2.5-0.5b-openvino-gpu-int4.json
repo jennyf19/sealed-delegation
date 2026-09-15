@@ -1,0 +1,59 @@
+{
+  "schema_version": "sealed-delegation/byom-candidate/v1",
+  "candidate_id": "qwen-qwen2.5-0.5b-instruct-7ae5576-openvino-gpu-int4",
+  "source": {
+    "provider": "hugging-face",
+    "repository": "Qwen/Qwen2.5-0.5B-Instruct",
+    "revision": "7ae557604adf67be50417f59c2c2f167def9a775",
+    "official_publisher": true,
+    "license_id": "apache-2.0",
+    "license_url": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct/blob/7ae557604adf67be50417f59c2c2f167def9a775/LICENSE",
+    "requires_remote_code": false
+  },
+  "conversion": {
+    "tool": "olive",
+    "olive_version": "0.13.0",
+    "recipe_repository": "microsoft/olive-recipes",
+    "recipe_revision": "38e17a606cdabc8f95e98c2424d60146f9ad5712",
+    "recipe_path": "Qwen-Qwen2.5-0.5B-Instruct/aitk/qwen2_5_ov_config.json",
+    "requirements_lock_path": "tools/byom-intake/requirements-openvino.lock.txt",
+    "requirements_lock_sha256": "576e19ddc81e54639046c9956b92f878503ba86e91213be57f57650c919110ee",
+    "device": "gpu",
+    "execution_provider": "OpenVINOExecutionProvider",
+    "precision": "int4",
+    "trust_remote_code": false,
+    "environment": {
+      "python_version": "3.12.10",
+      "numpy_version": "1.26.4",
+      "openvino_version": "2025.4.1",
+      "openvino_tokenizers_version": "2025.4.1.0",
+      "onnxruntime_openvino_version": "1.24.1",
+      "optimum_intel_version": "1.27.0",
+      "nncf_version": "2.19.0"
+    }
+  },
+  "artifact": {
+    "output_directory": "results/byom/q05-ovg4",
+    "inference_model_name": "qwen2.5-0.5b-byom:1",
+    "expected_max_size_bytes": 2147483648,
+    "required_artifacts": [
+      "genai_config.json",
+      "tokenizer.json",
+      "*.onnx",
+      "*.bin"
+    ]
+  },
+  "runtime": {
+    "foundry_sdk_version": "2.0.1",
+    "adapter_runtime_id": "foundry-local-session-byom",
+    "stream": "on",
+    "tools": ["view"],
+    "max_prompt_tokens": 16384
+  },
+  "qualification": {
+    "plain_completion": "required",
+    "typed_tool_probe": "required",
+    "staged_canary": "required",
+    "evidence_gate": "required"
+  }
+}

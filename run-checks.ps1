@@ -21,6 +21,18 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 & node --test (Join-Path $root "tools\route-policy.test.mjs")
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+& node --test (Join-Path $root "tools\byom-intake\validate-candidate.test.mjs")
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+& pwsh -NoProfile -File (Join-Path $root "tools\byom-intake\test-path-policy.ps1")
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+& pwsh -NoProfile -File (Join-Path $root "tools\byom-intake\test-recipe-policy.ps1")
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+& pwsh -NoProfile -File (Join-Path $root "tools\byom-intake\test-artifact-policy.ps1")
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 if ($SkipLive) {
     Write-Host "PASS: static sealed-delegation checks"
     exit 0
