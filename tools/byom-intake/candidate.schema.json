@@ -1,0 +1,224 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jennyf19/sealed-delegation/tools/byom-intake/candidate.schema.json",
+  "title": "Sealed Delegation BYOM Candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "candidate_id",
+    "source",
+    "conversion",
+    "artifact",
+    "runtime",
+    "qualification"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "sealed-delegation/byom-candidate/v1"
+    },
+    "candidate_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9.-]+$"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "repository",
+        "revision",
+        "official_publisher",
+        "license_id",
+        "license_url",
+        "requires_remote_code"
+      ],
+      "properties": {
+        "provider": { "const": "hugging-face" },
+        "repository": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "official_publisher": { "const": true },
+        "license_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "license_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://"
+        },
+        "requires_remote_code": { "type": "boolean" }
+      }
+    },
+    "conversion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tool",
+        "olive_version",
+        "recipe_repository",
+        "recipe_revision",
+        "recipe_path",
+        "requirements_lock_path",
+        "requirements_lock_sha256",
+        "device",
+        "execution_provider",
+        "precision",
+        "trust_remote_code",
+        "environment"
+      ],
+      "properties": {
+        "tool": { "const": "olive" },
+        "olive_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "recipe_repository": { "const": "microsoft/olive-recipes" },
+        "recipe_revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "recipe_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requirements_lock_path": {
+          "type": "string",
+          "pattern": "^tools/byom-intake/[A-Za-z0-9_.-]+$"
+        },
+        "requirements_lock_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "device": {
+          "enum": ["cpu", "gpu", "npu"]
+        },
+        "execution_provider": {
+          "enum": [
+            "CPUExecutionProvider",
+            "CUDAExecutionProvider",
+            "OpenVINOExecutionProvider",
+            "QNNExecutionProvider",
+            "VitisAIExecutionProvider",
+            "NvTensorRTRTXExecutionProvider",
+            "WebGpuExecutionProvider"
+          ]
+        },
+        "precision": {
+          "enum": ["fp32", "fp16", "int8", "int4"]
+        },
+        "trust_remote_code": { "type": "boolean" }
+        ,
+        "environment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "python_version",
+            "numpy_version",
+            "openvino_version",
+            "openvino_tokenizers_version",
+            "onnxruntime_openvino_version",
+            "optimum_intel_version",
+            "nncf_version"
+          ],
+          "properties": {
+            "python_version": { "const": "3.12.10" },
+            "numpy_version": { "const": "1.26.4" },
+            "openvino_version": { "const": "2025.4.1" },
+            "openvino_tokenizers_version": { "const": "2025.4.1.0" },
+            "onnxruntime_openvino_version": { "const": "1.24.1" },
+            "optimum_intel_version": { "const": "1.27.0" },
+            "nncf_version": { "const": "2.19.0" }
+          }
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "output_directory",
+        "inference_model_name",
+        "expected_max_size_bytes",
+        "required_artifacts"
+      ],
+      "properties": {
+        "output_directory": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inference_model_name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+:[1-9][0-9]*$"
+        },
+        "expected_max_size_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "required_artifacts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "foundry_sdk_version",
+        "adapter_runtime_id",
+        "stream",
+        "tools",
+        "max_prompt_tokens"
+      ],
+      "properties": {
+        "foundry_sdk_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "adapter_runtime_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9.-]+$"
+        },
+        "stream": { "const": "on" },
+        "tools": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "max_prompt_tokens": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "qualification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "plain_completion",
+        "typed_tool_probe",
+        "staged_canary",
+        "evidence_gate"
+      ],
+      "properties": {
+        "plain_completion": { "const": "required" },
+        "typed_tool_probe": { "const": "required" },
+        "staged_canary": { "const": "required" },
+        "evidence_gate": { "const": "required" }
+      }
+    }
+  }
+}

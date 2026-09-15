@@ -146,6 +146,7 @@ qualified here.
 | `tools/local-agent-preflight.ps1` | End-to-end staged-file canary |
 | `tools/foundry-stream-shim.mjs` | Temporary repair for Foundry Local #874 |
 | `tools/foundry-session-probe/` | Unqualified Foundry Local 2.0.1 typed Session API adapter experiment |
+| `tools/byom-intake/` | Pinned Hugging Face → Olive/ONNX intake and candidate receipts |
 | `examples/evidence-check/` | Synthetic sealed task, gate, and agentic variant |
 | `run-checks.ps1` | Static checks and optional live validation |
 
