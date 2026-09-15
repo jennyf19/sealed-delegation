@@ -57,6 +57,7 @@ whose output is always untrusted, and accepts nothing until an independent gate 
 | T13 | Embedded SDK terminal failure is hidden behind plausible partial output | Adapter records per-request terminal reason and the qualification gate rejects `length`, `error`, missing telemetry, and a final reason other than `stop` | Session adapter telemetry and qualification grader tests | The SDK and native execution provider remain trusted to report their own terminal state honestly |
 | T14 | Session adapter port remains reachable longer than required | Ephemeral loopback bind; runner starts immediately before serial execution and closes in `finally`; lifecycle receipt records closure | Session qualification runner and adapter loopback test | Other same-user processes can reach the port during the bounded run |
 | T15 | Adapter or embedded native runtime processes untrusted staged content | Prompts and staged files remain bounded by the launcher; only `view` is exposed; output remains untrusted and independently graded | Launcher, adapter, deterministic grader | The embedded SDK/native provider runs as the OS user without an OS sandbox |
+| T16 | A semantic grader is tuned after observing model prose | Meaning is represented by a frozen code selected from three predeclared alternatives; code positions are balanced; corpus hash approval precedes execution | Corpus validator, prompt template, deterministic grader | The alternatives themselves require human review before freezing |
 
 ## Explicit non-goals
 

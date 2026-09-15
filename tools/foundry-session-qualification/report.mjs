@@ -5,6 +5,7 @@ import {
   listAttemptDirectories,
   loadCorpus,
   readJsonLines,
+  validateCorpus,
   writeJson,
 } from "./qualification-lib.mjs";
 
@@ -26,7 +27,11 @@ const failureSummaryPath = valueAfter("--failure-summary");
 const threatReviewPath = valueAfter("--threat-review");
 const environmentPath = valueAfter("--environment");
 const { manifest } = loadCorpus(manifestPath);
-const attempts = listAttemptDirectories(resultsRoot).map((attemptRoot) => {
+const corpusValidation = validateCorpus(manifestPath);
+if (!corpusValidation.valid) {
+  throw new Error(`Corpus validation failed: ${corpusValidation.errors.join("; ")}`);
+}
+const allAttempts = listAttemptDirectories(resultsRoot).map((attemptRoot) => {
   const attemptPath = join(attemptRoot, "attempt.json");
   const gatePath = join(attemptRoot, "gate.json");
   const providerPath = join(attemptRoot, "provider-events.jsonl");
@@ -53,9 +58,15 @@ const attempts = listAttemptDirectories(resultsRoot).map((attemptRoot) => {
     malformed_output: gate?.malformed_output ?? false,
     fabricated_result: gate?.fabricated_result ?? false,
     authority_advanced: gate?.authority_advanced ?? false,
+    corpus_sha256: attempt.corpus_sha256 ?? null,
+    gate_schema_version: gate?.schema_version ?? null,
     provider_events: readJsonLines(providerPath),
   };
 });
+const staleAttempts = allAttempts.filter((attempt) =>
+  attempt.corpus_sha256 !== corpusValidation.corpus_sha256 ||
+  attempt.gate_schema_version !== "sealed-delegation/session-qualification-gate/v2");
+const attempts = allAttempts.filter((attempt) => !staleAttempts.includes(attempt));
 
 const firstAttempts = manifest.fixtures.map((fixture) =>
   attempts.find((attempt) =>
@@ -88,10 +99,12 @@ const promotionGate = {
   zero_malformed_results: !attempts.some((attempt) => attempt.malformed_output),
   zero_authority_advancement: !attempts.some((attempt) => attempt.authority_advanced),
   all_failure_injections_fail_closed: failureSummary?.passed === true &&
-    failureSummary?.passed_count === 10,
+    failureSummary?.passed_count === failureSummary?.case_count &&
+    failureSummary?.case_count === 13,
   no_unresolved_high_severity_threat: threatReview?.unresolved_high_severity === 0,
   adapter_closed_cleanly:
     lifecycle?.adapter_closed === true && lifecycle?.interrupted === false,
+  no_stale_or_mixed_attempts: staleAttempts.length === 0,
 };
 const mechanicallyPromotable = Object.values(promotionGate).every((value) => value === true);
 const recommendation = mechanicallyPromotable ? "PROMOTE" :
@@ -99,13 +112,15 @@ const recommendation = mechanicallyPromotable ? "PROMOTE" :
     attempt.authority_advanced) ? "REJECT" : "HOLD");
 
 const report = {
-  schema_version: "sealed-delegation/session-qualification-analysis/v1",
+  schema_version: "sealed-delegation/session-qualification-analysis/v2",
   generated_at: new Date().toISOString(),
   corpus_id: manifest.corpus_id,
+  corpus_sha256: corpusValidation.corpus_sha256,
   corpus_case_count: manifest.fixtures.length,
+  stale_attempt_count: staleAttempts.length,
   raw_attempt_count: attempts.length,
   first_attempt_pass_count: firstPassCount,
-  exact_pass_rate: attempts.length
+  semantic_contract_pass_rate: attempts.length
     ? attempts.filter((attempt) => attempt.gate_accepted).length / attempts.length
     : 0,
   false_success_count: attempts.filter((attempt) =>
@@ -135,7 +150,8 @@ const report = {
   promotion_gate: promotionGate,
   recommendation,
   attempts,
+  stale_attempts: staleAttempts,
 };
 writeJson(outputPath, report);
 console.log(JSON.stringify(report, null, 2));
-process.exitCode = recommendation === "REJECT" ? 2 : 0;
+process.exitCode = staleAttempts.length > 0 ? 1 : (recommendation === "REJECT" ? 2 : 0);

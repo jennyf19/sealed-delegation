@@ -264,6 +264,43 @@ export async function runFailureInjection({ manifestPath, outputRoot }) {
         expectedNonzeroExit: false,
       },
       {
+        id: "wrong-missing-input-code",
+        observation: { observable: true, reason: "missing_input_code_mismatch" },
+        run: baseRun,
+        raw: JSON.stringify({
+          ...fixture.expected,
+          missing_input_code: fixture.missing_input_options.find(
+            (code) => code !== fixture.expected.missing_input_code,
+          ),
+        }),
+        providerEvents: goodProviderEvents(),
+        expectedNonzeroExit: false,
+      },
+      {
+        id: "empty-missing-input-description",
+        observation: { observable: true, reason: "missing_input_description_invalid" },
+        run: baseRun,
+        raw: JSON.stringify({
+          ...fixture.expected,
+          missing_input: "   ",
+        }),
+        providerEvents: goodProviderEvents(),
+        expectedNonzeroExit: false,
+      },
+      {
+        id: "missing-semantic-code-field",
+        observation: { observable: true, reason: "json_shape_mismatch" },
+        run: baseRun,
+        raw: JSON.stringify({
+          status: fixture.expected.status,
+          answer: fixture.expected.answer,
+          missing_input: fixture.expected.missing_input,
+          source: fixture.expected.source,
+        }),
+        providerEvents: goodProviderEvents(),
+        expectedNonzeroExit: false,
+      },
+      {
         id: "child-timeout",
         observation: { observable: true, reason: "launcher_status_timeout" },
         run: { ...baseRun, status: "TIMEOUT", exit_code: 124 },
@@ -309,7 +346,7 @@ export async function runFailureInjection({ manifestPath, outputRoot }) {
       return result;
     });
     const summary = {
-      schema_version: "sealed-delegation/session-failure-injection/v1",
+      schema_version: "sealed-delegation/session-failure-injection/v2",
       generated_at: new Date().toISOString(),
       case_count: results.length,
       passed_count: results.filter((result) => result.passed).length,
@@ -317,7 +354,7 @@ export async function runFailureInjection({ manifestPath, outputRoot }) {
       authority_advanced: false,
       cases: results,
     };
-    assert.equal(summary.case_count, 10);
+    assert.equal(summary.case_count, 13);
     writeJson(join(outputRoot, "summary.json"), summary);
     return summary;
   } finally {

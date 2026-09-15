@@ -115,6 +115,17 @@ executes a model request. It preserves first attempts, requires explicit retry I
 provider terminal reasons, and rejects missing provider telemetry. Do not add this tuple to
 `approved-routes.json` from harness code or partial results.
 
+The first public n=20 run used an exact natural-language `missing_input` string and was held after
+0/20 lexical matches despite 20/20 blocked/null, correctly cited, non-fabricated results. That
+evidence remains immutable. A subsequent corpus version replaces lexical equality with a frozen
+three-way `missing_input_code` classification per fixture. The code is graded exactly; the
+human-readable description may be paraphrased. Correct-code positions are balanced, and the
+source does not contain the code or canonical description.
+
+This semantic corpus measures abstention and missing-evidence classification. It is not evidence
+that the route can distinguish answerable tasks from unanswerable ones; positive staged canaries
+remain a separate prerequisite.
+
 ## Not qualified
 
 - edit or shell profiles;

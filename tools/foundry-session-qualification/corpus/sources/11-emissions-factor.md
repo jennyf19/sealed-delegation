@@ -2,5 +2,5 @@
 
 Citation: `synthetic-energy#monthly-emissions`
 
-The facility consumed 42,600 kWh during August 2026. The report must use the grid factor for the
-facility's region and that reporting month. No regional factor table is included.
+Facility BLD-7 in grid region WECC-CA consumed 42,600 kWh during August 2026. The report must use
+the grid factor for that region and reporting month. No regional factor table is included.

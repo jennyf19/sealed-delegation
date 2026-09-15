@@ -74,7 +74,9 @@ function runProcess(file, args, { cwd, timeoutMs } = {}) {
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "../..");
 const manifestPath = resolve(valueAfter("--manifest") ?? join(here, "corpus/manifest.json"));
-const resultsRoot = resolve(valueAfter("--results") ?? join(repoRoot, "results/session-qualification"));
+const resultsRoot = resolve(
+  valueAfter("--results") ?? join(repoRoot, "results/session-qualification-semantic"),
+);
 const approvedHash = valueAfter("--approved-corpus-sha256");
 const validateOnly = process.argv.includes("--validate-only");
 const resume = process.argv.includes("--resume");
