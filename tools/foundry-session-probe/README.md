@@ -51,3 +51,10 @@ pwsh ..\local-agent-preflight.ps1 `
 
 Do not add this route to `approved-routes.json` until it passes repeated canaries, the frozen
 evidence-check gate, failure-path tests, and a threat-model review.
+
+The qualification harness is in
+[`../foundry-session-qualification`](../foundry-session-qualification). It starts the adapter on an
+ephemeral loopback port immediately before the serial run and closes it immediately afterward.
+Per-request telemetry records the requested and resolved model IDs, terminal reason, and token
+usage without recording prompts or response content. This telemetry is required because an
+exact-looking response with SDK terminal reason `length` must still fail closed.
