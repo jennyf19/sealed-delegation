@@ -1,7 +1,8 @@
 # Threat model
 
-**Review status:** Two-party review completed 2026-08-11. Enforcement claims were checked against
-the implementation and tests; executable PowerShell evidence comes from the qualified host.
+**Review status:** Two-party review completed 2026-08-11 for the qualified CLI/shim route.
+The Foundry Local SDK 2.0.1 Session adapter is a separate, unqualified route under issue #5; its
+addendum below requires review before promotion.
 
 ## System in one sentence
 
@@ -46,13 +47,19 @@ whose output is always untrusted, and accepts nothing until an independent gate 
 | T3 | Remote data exfiltration | Loopback checks at launcher and shim; proxies removed; redirects refused | URL checks and negative tests | A hostile trusted binary can still use the OS network |
 | T4 | Filesystem escape | Minimal available tools; writes/shell require explicit flags and isolated worktree | Launcher validation and tests | No filesystem ACL sandbox |
 | T5 | Output silently becomes authority | Distinct failure exits; required gate; dispositions and authority field | Output policy, gate, skill | An integrator can misuse launcher exit zero |
-| T6 | Poisoned model/runtime | Version tuple and preflight; all output untrusted | Qualification and preflight | Model weights are not independently verified |
+| T6 | Poisoned model/runtime | Version tuple and preflight; environment-v2 receipt inventories and hashes the exact resolved model directory, installed SDK package, and native runtime; all output remains untrusted | Qualification, environment receipt, resume validation, and report validation | Hashes bind the measured local files but do not establish publisher provenance or protect against host compromise |
 | T7 | Compromised Copilot binary | Version pin and re-preflight on changes | README and policy | **Largest residual:** binary runs fully trusted as the OS user |
 | T8 | Shim port abuse | Loopback bind; start late, stop early | Shim and operating procedure | Same-user process can reach the port while open |
-| T9 | Receipt tampering | Chained task, input, stdout, and stderr hashes | Launcher | Receipts are unsigned and assume host integrity |
+| T9 | Receipt tampering or stale derived gates | Chained task/input/output hashes; report re-grades raw stdout and telemetry and validates fixture/attempt/run/corpus links | Launcher, qualification grader, and report tests | Receipts are unsigned and assume host integrity |
 | T10 | Secret pasted into task text | Pre-launch secret-pattern screen; explicit high-risk override | Launcher and policy test | Pattern matching cannot detect every secret |
 | T11 | Hung or looping child | Hard timeout and process-tree termination | Launcher | Long but progressing runs can still be expensive in wall time |
 | T12 | Unapproved or policy-banned model is selected | Fail-closed exact runtime/model/profile/budget allowlist; explicit override recorded as unqualified | Route policy in launcher, preflight, and sealed demo; PowerShell and Node tests | Runtime/model labels are configuration claims, not cryptographic attestation of weights |
+| T13 | Embedded SDK terminal failure is hidden behind plausible partial output | Adapter records per-request terminal reason and the qualification gate rejects `length`, `error`, missing telemetry, and a final reason other than `stop` | Session adapter telemetry and qualification grader tests | The SDK and native execution provider remain trusted to report their own terminal state honestly |
+| T14 | Session adapter port remains reachable longer than required, or native resources are disposed while requests remain active | Ephemeral loopback bind; shutdown rejects new work, cancels and drains active requests, disposes sessions, then unloads the model and manager; lifecycle receipt records closure | Session qualification runner and adapter lifecycle tests | Other same-user processes can reach the port during the bounded run; a native SDK defect can still crash during orderly teardown |
+| T15 | Adapter or embedded native runtime processes untrusted staged content | Prompts and staged files remain bounded by the launcher; only `view` is exposed; output remains untrusted and independently graded; effective cache/library paths, exact model artifacts, and native runtime hashes are recorded and revalidated | Launcher, environment receipt, adapter, deterministic grader | The embedded SDK/native provider runs as the OS user without an OS sandbox |
+| T16 | A semantic grader is tuned after observing model prose | Meaning is represented by a frozen code selected from three predeclared alternatives; code positions are balanced; corpus hash approval precedes execution | Corpus validator, prompt template, deterministic grader | The alternatives themselves require human review before freezing |
+| T17 | Corpus is validated and then changed before the launcher stages it | Revalidate the full corpus before each attempt; copy the source into the attempt; bind its raw and normalized hashes through the launcher receipt and report | Qualification runner, grader, and report tests | Host compromise can still alter code and receipts together |
+| T18 | Missing or stale environment evidence is replaced by current defaults during reporting | Promotion requires a valid environment-v2 receipt; resume and report verify the frozen route/corpus, executable and SDK identities, harness file hashes, model tree, and native runtime tree | Qualification runner, shared environment validator, and report tests | Receipts remain unsigned and rely on host integrity while verification runs |
 
 ## Explicit non-goals
 
@@ -76,6 +83,10 @@ whose output is always untrusted, and accepts nothing until an independent gate 
 | Secret-pattern refusal | `test_policy.ps1` |
 | Approved-route enforcement | `test_policy.ps1` and `route-policy.test.mjs` |
 | Shim repair and de-duplication | `foundry-stream-shim.test.mjs` |
+| Session SDK terminal-reason telemetry | `foundry-session-probe/adapter.test.mjs` |
+| Session shutdown request draining | `foundry-session-probe/adapter.test.mjs` |
+| Session corpus and fail-closed grader | `foundry-session-qualification/qualification.test.mjs` |
+| Qualification artifact re-grading and linkage | `foundry-session-qualification/qualification.test.mjs` |
 
 ## Review rule
 

@@ -38,6 +38,7 @@ param(
     [int]$TimeoutSeconds = 900,
     [string]$RunRoot = $(Join-Path $HOME ".copilot\local-agent-runs"),
     [string]$RoutePolicyPath = $(Join-Path $PSScriptRoot "..\references\approved-routes.json"),
+    [string]$CopilotExecutable,
     [switch]$DryRun
 )
 
@@ -221,38 +222,112 @@ if (-not $DryRun) {
     try {
         $null = Invoke-ModelHealth $api
     } catch {
-        if (-not (Get-Command foundry -ErrorAction SilentlyContinue)) { throw }
+        if ($RuntimeId -ne "foundry-local" -or
+            -not (Get-Command foundry -ErrorAction SilentlyContinue)) {
+            throw
+        }
         foundry model load $FoundryAlias | Out-Null
         $null = Invoke-ModelHealth $api
     }
 }
 
-$copilotCommands = @(Get-Command copilot -All -ErrorAction Stop)
-$copilotNative = $copilotCommands |
-    Where-Object {
-        if ($IsWindows) {
-            return $_.CommandType -eq "Application" -and
-                [System.IO.Path]::GetExtension($_.Source) -ieq ".exe"
-        }
-        return $_.CommandType -eq "Application" -and
-            [System.IO.Path]::GetExtension($_.Source) -notin @(".cmd", ".bat")
-    } |
-    Select-Object -First 1
-$copilotScript = $copilotCommands |
-    Where-Object { $_.Source.EndsWith(".ps1", [System.StringComparison]::OrdinalIgnoreCase) } |
-    Select-Object -First 1
-
-if ($copilotNative) {
-    $copilotCommand = $copilotNative.Source
-    $copilotLauncher = $copilotNative.Source
+if ($CopilotExecutable) {
+    $copilotCommand = (Resolve-Path -LiteralPath $CopilotExecutable -ErrorAction Stop).Path
+    if (-not (Test-Path -LiteralPath $copilotCommand -PathType Leaf)) {
+        throw "CopilotExecutable must resolve to a file."
+    }
+    $copilotLauncher = $copilotCommand
     [string[]]$copilotPrefixArguments = @()
-} elseif ($copilotScript) {
-    $pwsh = Get-Command pwsh -CommandType Application -ErrorAction Stop
-    $copilotCommand = $copilotScript.Source
-    $copilotLauncher = $pwsh.Source
-    [string[]]$copilotPrefixArguments = @("-NoProfile", "-File", $copilotScript.Source)
 } else {
-    throw "No directly executable Copilot CLI or PowerShell shim was found."
+    $copilotCommands = @(Get-Command copilot -All -ErrorAction Stop)
+    $copilotNative = $copilotCommands |
+        Where-Object {
+            if ($IsWindows) {
+                return $_.CommandType -eq "Application" -and
+                    [System.IO.Path]::GetExtension($_.Source) -ieq ".exe" -and
+                    (Get-Item -LiteralPath $_.Source).Length -gt 0
+            }
+            return $_.CommandType -eq "Application" -and
+                [System.IO.Path]::GetExtension($_.Source) -notin @(".cmd", ".bat")
+        } |
+        Select-Object -First 1
+    $copilotScript = $copilotCommands |
+        Where-Object { $_.Source.EndsWith(".ps1", [System.StringComparison]::OrdinalIgnoreCase) } |
+        Select-Object -First 1
+
+    if ($copilotNative) {
+        $copilotCommand = $copilotNative.Source
+        $copilotLauncher = $copilotNative.Source
+        [string[]]$copilotPrefixArguments = @()
+    } elseif ($copilotScript) {
+        $pwsh = Get-Command pwsh -CommandType Application -ErrorAction Stop
+        $copilotCommand = $copilotScript.Source
+        $copilotLauncher = $pwsh.Source
+        [string[]]$copilotPrefixArguments = @("-NoProfile", "-File", $copilotScript.Source)
+    } else {
+        throw "No directly executable Copilot CLI or PowerShell shim was found."
+    }
+}
+$copilotCommandSha256 = (Get-FileHash -LiteralPath $copilotCommand -Algorithm SHA256).Hash.ToLowerInvariant()
+$copilotVersionStartInfo = [System.Diagnostics.ProcessStartInfo]::new()
+$copilotVersionStartInfo.FileName = $copilotLauncher
+$copilotVersionStartInfo.UseShellExecute = $false
+$copilotVersionStartInfo.RedirectStandardOutput = $true
+$copilotVersionStartInfo.RedirectStandardError = $true
+$copilotVersionStartInfo.CreateNoWindow = $true
+foreach ($argument in $copilotPrefixArguments) {
+    $copilotVersionStartInfo.ArgumentList.Add($argument)
+}
+$copilotVersionStartInfo.ArgumentList.Add("--version")
+$copilotVersionProcess = [System.Diagnostics.Process]::new()
+$copilotVersionProcess.StartInfo = $copilotVersionStartInfo
+$versionEnvironmentRoot = New-Item -ItemType Directory -Force (
+    Join-Path ([System.IO.Path]::GetTempPath()) ("copilot-version-" + [guid]::NewGuid().ToString("N"))
+)
+try {
+    $versionHome = New-Item -ItemType Directory -Force (Join-Path $versionEnvironmentRoot "home")
+    $versionTemp = New-Item -ItemType Directory -Force (Join-Path $versionEnvironmentRoot "temp")
+    $versionAppData = New-Item -ItemType Directory -Force (Join-Path $versionHome "AppData\Roaming")
+    $versionLocalAppData = New-Item -ItemType Directory -Force (Join-Path $versionHome "AppData\Local")
+    $copilotVersionStartInfo.Environment.Clear()
+    foreach ($key in @(
+        "SystemRoot", "SystemDrive", "WINDIR", "COMSPEC", "PATH", "PATHEXT", "OS",
+        "PROCESSOR_ARCHITECTURE", "PROCESSOR_IDENTIFIER", "NUMBER_OF_PROCESSORS"
+    )) {
+        $value = [System.Environment]::GetEnvironmentVariable($key)
+        if (-not [string]::IsNullOrEmpty($value)) {
+            $copilotVersionStartInfo.Environment[$key] = $value
+        }
+    }
+    $copilotVersionStartInfo.Environment["HOME"] = $versionHome.FullName
+    $copilotVersionStartInfo.Environment["USERPROFILE"] = $versionHome.FullName
+    $copilotVersionStartInfo.Environment["APPDATA"] = $versionAppData.FullName
+    $copilotVersionStartInfo.Environment["LOCALAPPDATA"] = $versionLocalAppData.FullName
+    $copilotVersionStartInfo.Environment["TEMP"] = $versionTemp.FullName
+    $copilotVersionStartInfo.Environment["TMP"] = $versionTemp.FullName
+    $null = $copilotVersionProcess.Start()
+    $copilotVersionStdout = $copilotVersionProcess.StandardOutput.ReadToEndAsync()
+    $copilotVersionStderr = $copilotVersionProcess.StandardError.ReadToEndAsync()
+    $copilotVersionCompleted = $copilotVersionProcess.WaitForExit(30000)
+    if (-not $copilotVersionCompleted) {
+        $copilotVersionProcess.Kill($true)
+        $copilotVersionProcess.WaitForExit()
+    }
+    $copilotVersionOutput = (
+        $copilotVersionStdout.GetAwaiter().GetResult() +
+        $copilotVersionStderr.GetAwaiter().GetResult()
+    ).Trim()
+    if (-not $copilotVersionCompleted) {
+        throw "The selected Copilot executable version check timed out."
+    }
+    if ($copilotVersionProcess.ExitCode -ne 0) {
+        throw "The selected Copilot executable did not report its version."
+    }
+} finally {
+    $copilotVersionProcess.Dispose()
+    if (Test-Path -LiteralPath $versionEnvironmentRoot) {
+        Remove-Item -LiteralPath $versionEnvironmentRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 $runId = (Get-Date -Format "yyyyMMdd-HHmmss") + "-" + [guid]::NewGuid().ToString("N").Substring(0, 8)
 $runDirectory = New-Item -ItemType Directory -Force (Join-Path $RunRoot $runId)
@@ -361,7 +436,9 @@ $metadata = [ordered]@{
     input_manifest_path = $(if ($stagedInputManifest.Count -gt 0) { $inputManifestPath } else { $null })
     staged_inputs = @($stagedInputManifest)
     copilot_command = $copilotCommand
+    copilot_command_sha256 = $copilotCommandSha256
     copilot_launcher = $copilotLauncher
+    copilot_version_output = $copilotVersionOutput
     effective_task_path = $effectiveTaskPath
     effective_task_sha256 = $effectiveTaskHash
     credential_environment_inherited = [bool]$AllowCredentialEnvironment
@@ -503,10 +580,23 @@ try {
     $completed = $process.WaitForExit($TimeoutSeconds * 1000)
     if (-not $completed) {
         $process.Kill($true)
-        $process.WaitForExit()
+        $terminated = $process.WaitForExit(5000)
+        if (-not $terminated) {
+            throw "Timed-out Copilot process did not terminate within 5 seconds."
+        }
+        $streamsDrained = [System.Threading.Tasks.Task]::WaitAll(
+            [System.Threading.Tasks.Task[]]@($stdoutTask, $stderrTask),
+            5000
+        )
+        if (-not $streamsDrained) {
+            $stdout = ""
+            $stderr = "Timed-out Copilot process left inherited output handles open."
+        }
     }
-    $stdout = $stdoutTask.GetAwaiter().GetResult()
-    $stderr = $stderrTask.GetAwaiter().GetResult()
+    if ($completed -or $streamsDrained -eq $true) {
+        $stdout = $stdoutTask.GetAwaiter().GetResult()
+        $stderr = $stderrTask.GetAwaiter().GetResult()
+    }
     $stdout | Set-Content $stdoutPath -Encoding utf8
     $stderr | Set-Content $stderrPath -Encoding utf8
 } finally {

@@ -95,6 +95,52 @@ A local `BLOCK` remains a proposal. The caller must independently confirm the na
 The corpus and raw receipts are not shipped in this preview; a public reproduction kit is follow-up
 work. Do not treat this claim as independently reproducible from the current package.
 
+## Session adapter qualification in progress
+
+Issue #5 qualifies a separate route that uses `foundry-local-sdk` 2.0.1 `ChatSession` requests
+through the loopback adapter in `tools/foundry-session-probe`. The public reproduction harness is
+in `tools/foundry-session-qualification`.
+
+This route remains unqualified. Its frozen target tuple is:
+
+- runtime `foundry-local-session`;
+- model package `qwen2.5-7b-instruct-generic-gpu:4`;
+- stream mode on;
+- `view` as the only child tool;
+- 16,384 prompt-token budget;
+- `read` profile with `evidence-check` task mode.
+
+The harness requires explicit operator approval of the corpus hash before it starts the adapter or
+executes a model request. It preserves first attempts, requires explicit retry IDs, records
+provider terminal reasons, and rejects missing provider telemetry. Before each attempt it
+revalidates the entire corpus and executes an attempt-local source snapshot whose normalized hash
+must match the approved corpus receipt. The final report re-grades raw stdout and telemetry rather
+than trusting copied gate fields. Do not add this tuple to `approved-routes.json` from harness code
+or partial results.
+
+The runner pins a concrete copy of the executable-reported Copilot CLI binary for the duration of
+one qualification. The Windows app-execution alias is not used for child launches because it can
+advance to a newer CLI build during a long serial run. The environment receipt also records
+effective Foundry cache and native-library overrides and hashes the exact resolved model-version
+directory, installed Foundry SDK package, and native runtime used by the adapter. Resume and final reporting use
+the same environment-v2 validator; a missing receipt, changed model/runtime file, changed harness
+file, or mismatched route/corpus/runtime tuple fails closed and prevents promotion.
+
+The first public n=20 run used an exact natural-language `missing_input` string and was held after
+0/20 lexical matches despite 20/20 blocked/null, correctly cited, non-fabricated results. That
+evidence remains immutable. A subsequent corpus version replaces lexical equality with a frozen
+three-way `missing_input_code` classification per fixture. The code is graded exactly; the
+human-readable description may be paraphrased. Correct-code positions are balanced, and the
+source does not contain the code or canonical description.
+
+This semantic corpus measures abstention and missing-evidence classification. It is not evidence
+that the route can distinguish answerable tasks from unanswerable ones; positive staged canaries
+remain a separate prerequisite.
+
+The frozen semantic result for issue #5 remains 13/20 and `HOLD`. Harness-integrity fixes do not
+reinterpret or rerun that evidence. A future qualification requires a new prospectively approved
+corpus version after the semantic, raw-markup, and native shutdown blockers are addressed.
+
 ## Not qualified
 
 - edit or shell profiles;
