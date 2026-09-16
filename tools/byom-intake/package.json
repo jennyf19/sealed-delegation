@@ -1,0 +1,13 @@
+{
+  "name": "sealed-delegation-byom-intake",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test validate-candidate.test.mjs",
+    "validate:qwen": "node validate-candidate.mjs candidates/qwen2.5-0.5b-openvino-gpu-int4.json"
+  },
+  "dependencies": {
+    "ajv": "8.17.1",
+    "ajv-formats": "3.0.1"
+  }
+}
