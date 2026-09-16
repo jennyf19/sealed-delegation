@@ -63,9 +63,10 @@ npm install --prefix tools\foundry-session-probe
 Do not set `FOUNDRY_LOCAL_SKIP_INSTALL` unless `FOUNDRY_LIBRARY_PATH` already points to a reviewed
 native runtime. The SDK package's Node addon is not sufficient without its platform ONNX Runtime
 libraries. The environment receipt records the effective model-cache and native-library paths,
-whether environment overrides supplied them, and a file-by-file hash plus aggregate tree hash for
-the effective native runtime. `FOUNDRY_LOCAL_SKIP_INSTALL` without an explicit library path is
-rejected.
+whether environment overrides supplied them, and file-by-file plus aggregate tree hashes for both
+the exact resolved model-version directory, installed Foundry SDK package, and effective native
+runtime.
+`FOUNDRY_LOCAL_SKIP_INSTALL` without an explicit library path is rejected.
 
 Commit the harness first so the environment receipt can require a clean worktree. Then pass the
 exact hash JM approved:
@@ -146,8 +147,12 @@ node tools\foundry-session-qualification\report.mjs `
 The report reads launcher stdout and provider telemetry again, independently re-runs the grader, and
 verifies fixture, attempt, run, corpus, source, staged-input, and gate links. A copied or stale
 `gate.json` cannot improve the report. It also rejects attempts from another corpus hash or gate
-schema, so the lexical v1 evidence and semantic v2 evidence cannot be mixed. JM owns the final
-`PROMOTE`, `HOLD`, or `REJECT` decision. Promotion, if authorized, belongs in a separate PR.
+schema, so the lexical v1 evidence and semantic v2 evidence cannot be mixed. Promotion additionally
+requires a valid environment-v2 receipt whose frozen route and corpus, Copilot and Foundry
+executables, SDK lockfile and installed package, harness files, native runtime tree, and exact model
+artifact tree still match their recorded hashes. A missing or invalid environment receipt fails
+closed. JM owns the
+final `PROMOTE`, `HOLD`, or `REJECT` decision. Promotion, if authorized, belongs in a separate PR.
 
 Harness hardening never changes or reruns a previously frozen qualification result. Any changed
 prompt, gate, runtime, or corpus requires a new prospectively approved corpus version.

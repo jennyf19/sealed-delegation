@@ -42,6 +42,26 @@ function Get-NativeCopilot {
     return $native.Source
 }
 
+function Get-NativeFoundry {
+    $native = @(Get-Command foundry -All -ErrorAction Stop) |
+        Where-Object {
+            $_.CommandType -eq "Application" -and
+                [System.IO.Path]::GetExtension($_.Source) -ieq ".exe" -and
+                (Get-Item -LiteralPath $_.Source).Length -gt 0
+        } |
+        Select-Object -First 1
+    if ($native) {
+        return $native.Source
+    }
+    $package = Get-AppxPackage Microsoft.FoundryLocal -ErrorAction Stop
+    $packagedExecutable = Join-Path $package.InstallLocation "foundry.exe"
+    if (-not (Test-Path -LiteralPath $packagedExecutable) -or
+        (Get-Item -LiteralPath $packagedExecutable).Length -le 0) {
+        throw "Could not resolve the native Foundry Local executable behind the app alias."
+    }
+    return $packagedExecutable
+}
+
 function Get-CommandOutput([string]$FileName, [string[]]$Arguments) {
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
     $startInfo.FileName = $FileName
@@ -78,10 +98,10 @@ function Get-HashReceipt([string]$Path) {
     }
 }
 
-function Get-BinaryTreeReceipt([string]$Path) {
+function Get-FileTreeReceipt([string]$Path, [string]$Description) {
     $resolved = (Resolve-Path -LiteralPath $Path -ErrorAction Stop).Path
     if (-not (Get-Item -LiteralPath $resolved).PSIsContainer) {
-        throw "Native runtime path is not a directory: $resolved"
+        throw "$Description path is not a directory: $resolved"
     }
     $files = @(Get-ChildItem -LiteralPath $resolved -Recurse -File |
         Sort-Object FullName |
@@ -93,7 +113,7 @@ function Get-BinaryTreeReceipt([string]$Path) {
             }
         })
     if ($files.Count -eq 0) {
-        throw "Native runtime path contains no files: $resolved"
+        throw "$Description path contains no files: $resolved"
     }
     $hashMaterial = ($files | ForEach-Object { "$($_.path)`0$($_.sha256)" }) -join "`n"
     $treeHash = [Convert]::ToHexString(
@@ -109,9 +129,17 @@ function Get-BinaryTreeReceipt([string]$Path) {
     }
 }
 
+function Get-SafePathSegment([string]$Value, [string]$Description) {
+    if ([string]::IsNullOrWhiteSpace($Value) -or
+        $Value -notmatch '^[A-Za-z0-9._-]+$') {
+        throw "$Description is not a safe cache path segment: $Value"
+    }
+    return $Value
+}
+
 $copilotExecutable = Get-NativeCopilot
 $copilotVersion = Get-CommandOutput $copilotExecutable @("--version")
-$foundryExecutable = (Get-Command foundry -CommandType Application -ErrorAction Stop).Source
+$foundryExecutable = Get-NativeFoundry
 $foundryVersion = Get-CommandOutput $foundryExecutable @("--version")
 $cacheLocation = Get-CommandOutput $foundryExecutable @("cache", "location", "-o", "json") |
     ConvertFrom-Json
@@ -140,16 +168,45 @@ if (-not [string]::IsNullOrWhiteSpace($skipInstallOverride) -and
     [string]::IsNullOrWhiteSpace($libraryPathOverride)) {
     throw "FOUNDRY_LOCAL_SKIP_INSTALL requires an explicit FOUNDRY_LIBRARY_PATH."
 }
-$nativeRuntime = Get-BinaryTreeReceipt $effectiveLibraryPath
-$cachedModels = Get-CommandOutput $foundryExecutable @(
-    "model", "list", "--cached", "--variants",
-    "--search", "qwen2.5-7b-instruct-generic-gpu", "-o", "json"
-) | ConvertFrom-Json
-$targetModel = @($cachedModels.variants) |
-    Where-Object variantId -eq "qwen2.5-7b-instruct-generic-gpu:4" |
+$nativeRuntime = Get-FileTreeReceipt $effectiveLibraryPath "Native runtime"
+$sdkRuntime = Get-FileTreeReceipt $sdkRoot "Foundry SDK package"
+$modelCatalogPath = Join-Path $effectiveModelCache "foundry.modelinfo.json"
+$modelCatalog = Get-Content -LiteralPath $modelCatalogPath -Raw | ConvertFrom-Json
+$catalogModel = @($modelCatalog.models) |
+    Where-Object id -eq "qwen2.5-7b-instruct-generic-gpu:4" |
     Select-Object -First 1
-if (-not $targetModel -or -not $targetModel.cached) {
+if (-not $catalogModel -or -not $catalogModel.cached) {
     throw "The exact target model qwen2.5-7b-instruct-generic-gpu:4 is not cached."
+}
+$publisher = Get-SafePathSegment $catalogModel.publisher "Model publisher"
+$modelName = Get-SafePathSegment $catalogModel.name "Model name"
+$modelVersion = [int]$catalogModel.version
+if ($modelVersion -le 0) {
+    throw "Model version must be positive."
+}
+$catalogEntryMaterial = "$($catalogModel.id)`0$($catalogModel.uri)`0$publisher`0$modelName`0$modelVersion"
+$catalogEntrySha256 = [Convert]::ToHexString(
+    [System.Security.Cryptography.SHA256]::HashData(
+        [System.Text.Encoding]::UTF8.GetBytes($catalogEntryMaterial)
+    )
+).ToLowerInvariant()
+$modelArtifactPath = Join-Path $effectiveModelCache (
+    Join-Path $publisher (
+        Join-Path "$modelName-$modelVersion" "v$modelVersion"
+    )
+)
+$modelArtifacts = Get-FileTreeReceipt $modelArtifactPath "Target model"
+$targetModel = [ordered]@{
+    alias = $catalogModel.alias
+    variantName = $catalogModel.name
+    variantId = $catalogModel.id
+    type = $catalogModel.task
+    device = $catalogModel.runtime.deviceType
+    executionProvider = $catalogModel.runtime.executionProvider
+    fileSizeMb = $catalogModel.fileSizeMb
+    cached = $catalogModel.cached
+    license = $catalogModel.license
+    uri = $catalogModel.uri
 }
 
 $packageLock = Get-Content -LiteralPath $packageLockPath -Raw | ConvertFrom-Json -AsHashTable
@@ -181,6 +238,7 @@ $filesToHash = @(
     (Join-Path $qualificationRoot "report.mjs")
     (Join-Path $qualificationRoot "environment-receipt.ps1")
     (Join-Path $adapterRoot "adapter.mjs")
+    $packageLockPath
     (Join-Path $repoRoot ".github\skills\local-agent-delegation\scripts\invoke_local_agent.ps1")
 )
 
@@ -209,6 +267,7 @@ $receipt = [ordered]@{
     }
     foundry_cli = [ordered]@{
         executable = $foundryExecutable
+        executable_sha256 = (Get-FileHash -LiteralPath $foundryExecutable -Algorithm SHA256).Hash.ToLowerInvariant()
         version = $foundryVersion
         cache_location = $cacheLocation.path
     }
@@ -216,6 +275,8 @@ $receipt = [ordered]@{
         package = "foundry-local-sdk"
         version = $sdkVersion
         package_lock = $packageLockPath
+        package_lock_sha256 = (Get-HashReceipt $packageLockPath).sha256
+        runtime = $sdkRuntime
     }
     model_cache = $targetModel
     runtime_paths = [ordered]@{
@@ -223,6 +284,23 @@ $receipt = [ordered]@{
             effective_path = $effectiveModelCache
             override_present = -not [string]::IsNullOrWhiteSpace($modelCacheOverride)
             override_value = $(if ([string]::IsNullOrWhiteSpace($modelCacheOverride)) { $null } else { $modelCacheOverride })
+            catalog = [ordered]@{
+                path = $modelCatalogPath
+                model_id = $catalogModel.id
+                uri = $catalogModel.uri
+                publisher = $publisher
+                name = $modelName
+                version = $modelVersion
+                entry_sha256 = $catalogEntrySha256
+            }
+            model = [ordered]@{
+                model_id = $catalogModel.id
+                catalog_uri = $catalogModel.uri
+                path = $modelArtifacts.path
+                tree_sha256 = $modelArtifacts.tree_sha256
+                file_count = $modelArtifacts.file_count
+                files = $modelArtifacts.files
+            }
         }
         native_library = [ordered]@{
             effective_path = $effectiveLibraryPath

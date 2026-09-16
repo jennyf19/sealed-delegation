@@ -1,12 +1,15 @@
 import { createHash } from "node:crypto";
 import {
+  closeSync,
   existsSync,
+  openSync,
+  readSync,
   readFileSync,
   readdirSync,
   statSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 export const TARGET_ROUTE = Object.freeze({
   runtime: "foundry-local-session",
@@ -17,6 +20,29 @@ export const TARGET_ROUTE = Object.freeze({
   task_mode: "evidence-check",
   max_prompt_tokens: 16384,
 });
+
+export const ENVIRONMENT_SCHEMA_VERSION =
+  "sealed-delegation/session-environment/v2";
+export const TARGET_FOUNDRY_CLI_VERSION = "0.10.3";
+export const TARGET_FOUNDRY_SDK_VERSION = "2.0.1";
+
+const SHA256_PATTERN = /^[a-f0-9]{64}$/;
+const REQUIRED_ENVIRONMENT_FILE_SUFFIXES = Object.freeze([
+  ".github/skills/local-agent-delegation/references/approved-routes.json",
+  ".github/skills/local-agent-delegation/scripts/invoke_local_agent.ps1",
+  "tools/foundry-session-probe/adapter.mjs",
+  "tools/foundry-session-probe/package-lock.json",
+  "tools/foundry-session-qualification/attempt-execution.mjs",
+  "tools/foundry-session-qualification/corpus/manifest.json",
+  "tools/foundry-session-qualification/environment-receipt.ps1",
+  "tools/foundry-session-qualification/failure-injection-lib.mjs",
+  "tools/foundry-session-qualification/failure-injection.mjs",
+  "tools/foundry-session-qualification/grader.mjs",
+  "tools/foundry-session-qualification/prompt-template.txt",
+  "tools/foundry-session-qualification/qualification-lib.mjs",
+  "tools/foundry-session-qualification/report.mjs",
+  "tools/foundry-session-qualification/runner.mjs",
+]);
 
 export function sha256Bytes(value) {
   return createHash("sha256").update(value).digest("hex");
@@ -31,7 +57,269 @@ export function sha256NormalizedText(value) {
 }
 
 export function sha256File(path) {
-  return sha256Bytes(readFileSync(path));
+  const hash = createHash("sha256");
+  const descriptor = openSync(path, "r");
+  const buffer = Buffer.allocUnsafe(4 * 1024 * 1024);
+  try {
+    let bytesRead;
+    do {
+      bytesRead = readSync(descriptor, buffer, 0, buffer.length, null);
+      if (bytesRead > 0) hash.update(buffer.subarray(0, bytesRead));
+    } while (bytesRead > 0);
+  } finally {
+    closeSync(descriptor);
+  }
+  return hash.digest("hex");
+}
+
+function sameJson(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function normalizedReceiptPath(path) {
+  return path.replaceAll("\\", "/");
+}
+
+function isWithin(root, candidate) {
+  const relativePath = relative(resolve(root), resolve(candidate));
+  return relativePath === "" ||
+    (!relativePath.startsWith("..") && !isAbsolute(relativePath));
+}
+
+function validateTreeReceipt(receipt, label, errors) {
+  if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) {
+    errors.push(`${label}_receipt_missing`);
+    return;
+  }
+  if (!receipt.path || !isAbsolute(receipt.path) ||
+      !existsSync(receipt.path) || !statSync(receipt.path).isDirectory()) {
+    errors.push(`${label}_path_invalid`);
+    return;
+  }
+  if (!Array.isArray(receipt.files) || receipt.files.length === 0 ||
+      receipt.file_count !== receipt.files.length ||
+      !SHA256_PATTERN.test(receipt.tree_sha256 ?? "")) {
+    errors.push(`${label}_inventory_invalid`);
+    return;
+  }
+  const normalizedPaths = receipt.files.map((file) =>
+    typeof file?.path === "string" ? normalizedReceiptPath(file.path) : "");
+  if (new Set(normalizedPaths).size !== normalizedPaths.length ||
+      normalizedPaths.some((path) =>
+        !path || isAbsolute(path) || path === ".." || path.startsWith("../"))) {
+    errors.push(`${label}_file_path_invalid`);
+    return;
+  }
+  const sortedFiles = [...receipt.files].sort((left, right) =>
+    normalizedReceiptPath(left.path).localeCompare(
+      normalizedReceiptPath(right.path),
+      "en",
+    ));
+  const verifiedFiles = [];
+  for (const file of sortedFiles) {
+    const path = resolve(receipt.path, file.path);
+    if (!isWithin(receipt.path, path) ||
+        !existsSync(path) ||
+        !statSync(path).isFile() ||
+        statSync(path).size !== file.size_bytes ||
+        !SHA256_PATTERN.test(file.sha256 ?? "") ||
+        sha256File(path) !== file.sha256) {
+      errors.push(`${label}_file_hash_mismatch`);
+      return;
+    }
+    verifiedFiles.push({
+      path: normalizedReceiptPath(file.path),
+      sha256: file.sha256,
+    });
+  }
+  const treeHash = sha256Bytes(
+    verifiedFiles.map((file) => `${file.path}\0${file.sha256}`).join("\n"),
+  );
+  if (treeHash !== receipt.tree_sha256) {
+    errors.push(`${label}_tree_hash_mismatch`);
+  }
+}
+
+function validateEnvironmentReceiptInternal(environment, corpusValidation) {
+  const errors = [];
+  if (!environment || typeof environment !== "object" || Array.isArray(environment)) {
+    return { valid: false, errors: ["environment_receipt_missing"] };
+  }
+  if (environment.schema_version !== ENVIRONMENT_SCHEMA_VERSION) {
+    errors.push("environment_schema_mismatch");
+  }
+  if (!environment.repository ||
+      !environment.repository.root ||
+      !isAbsolute(environment.repository.root) ||
+      !/^[a-f0-9]{40}$/i.test(environment.repository.commit_sha ?? "") ||
+      typeof environment.repository.branch !== "string" ||
+      environment.repository.branch.length === 0 ||
+      environment.repository.clean !== true) {
+    errors.push("environment_repository_invalid");
+  }
+  if (!sameJson(environment.route, TARGET_ROUTE)) {
+    errors.push("environment_route_mismatch");
+  }
+  if (!corpusValidation?.valid ||
+      environment.corpus?.corpus_sha256 !== corpusValidation.corpus_sha256 ||
+      !sameJson(environment.corpus?.files, corpusValidation.files)) {
+    errors.push("environment_corpus_mismatch");
+  }
+
+  const copilot = environment.copilot;
+  if (!copilot?.executable ||
+      !isAbsolute(copilot.executable) ||
+      !existsSync(copilot.executable) ||
+      !statSync(copilot.executable).isFile() ||
+      !SHA256_PATTERN.test(copilot.executable_sha256 ?? "") ||
+      sha256File(copilot.executable) !== copilot.executable_sha256 ||
+      typeof copilot.version_output !== "string" ||
+      copilot.version_output.trim().length === 0) {
+    errors.push("environment_copilot_invalid");
+  }
+
+  const foundryCli = environment.foundry_cli;
+  if (!foundryCli?.executable ||
+      !isAbsolute(foundryCli.executable) ||
+      !existsSync(foundryCli.executable) ||
+      !statSync(foundryCli.executable).isFile() ||
+      !SHA256_PATTERN.test(foundryCli.executable_sha256 ?? "") ||
+      sha256File(foundryCli.executable) !== foundryCli.executable_sha256 ||
+      foundryCli.version !== TARGET_FOUNDRY_CLI_VERSION ||
+      typeof foundryCli.cache_location !== "string" ||
+      foundryCli.cache_location.length === 0 ||
+      !isAbsolute(foundryCli.cache_location)) {
+    errors.push("environment_foundry_cli_invalid");
+  }
+  const foundrySdk = environment.foundry_sdk;
+  if (foundrySdk?.package !== "foundry-local-sdk" ||
+      foundrySdk?.version !== TARGET_FOUNDRY_SDK_VERSION ||
+      !foundrySdk.package_lock ||
+      !isAbsolute(foundrySdk.package_lock) ||
+      !existsSync(foundrySdk.package_lock) ||
+      sha256NormalizedText(readFileSync(foundrySdk.package_lock, "utf8")) !==
+        foundrySdk.package_lock_sha256) {
+    errors.push("environment_foundry_sdk_invalid");
+  }
+  validateTreeReceipt(
+    foundrySdk?.runtime,
+    "environment_foundry_sdk_runtime",
+    errors,
+  );
+  if (environment.model_cache?.variantId !== TARGET_ROUTE.model ||
+      environment.model_cache?.cached !== true ||
+      typeof environment.model_cache?.alias !== "string" ||
+      environment.model_cache.alias.length === 0) {
+    errors.push("environment_model_metadata_invalid");
+  }
+
+  const modelCache = environment.runtime_paths?.model_cache;
+  if (!modelCache?.effective_path ||
+      !isAbsolute(modelCache.effective_path) ||
+      !existsSync(modelCache.effective_path) ||
+      !statSync(modelCache.effective_path).isDirectory()) {
+    errors.push("environment_model_cache_path_invalid");
+  } else {
+    if (foundryCli?.cache_location &&
+        resolve(foundryCli.cache_location) !== resolve(modelCache.effective_path)) {
+      errors.push("environment_model_cache_location_mismatch");
+    }
+    const catalog = modelCache.catalog;
+    if (!catalog?.path ||
+        !isWithin(modelCache.effective_path, catalog.path) ||
+        !existsSync(catalog.path)) {
+      errors.push("environment_model_catalog_invalid");
+    } else {
+      const currentCatalog = JSON.parse(readFileSync(catalog.path, "utf8"));
+      const currentModel = currentCatalog.models?.find(
+        (model) => model.id === TARGET_ROUTE.model,
+      );
+      const catalogMaterial = currentModel
+        ? [
+            currentModel.id,
+            currentModel.uri,
+            currentModel.publisher,
+            currentModel.name,
+            currentModel.version,
+          ].join("\0")
+        : null;
+      if (!currentModel ||
+          catalog.model_id !== currentModel.id ||
+          catalog.uri !== currentModel.uri ||
+          catalog.publisher !== currentModel.publisher ||
+          catalog.name !== currentModel.name ||
+          Number(catalog.version) !== Number(currentModel.version) ||
+          !SHA256_PATTERN.test(catalog.entry_sha256 ?? "") ||
+          sha256Bytes(catalogMaterial) !== catalog.entry_sha256) {
+        errors.push("environment_model_catalog_invalid");
+      }
+    }
+    if (modelCache.model?.model_id !== TARGET_ROUTE.model ||
+        modelCache.model?.catalog_uri !== environment.model_cache?.uri ||
+        !modelCache.model?.path ||
+        !isWithin(modelCache.effective_path, modelCache.model.path)) {
+      errors.push("environment_model_binding_invalid");
+    } else {
+      validateTreeReceipt(modelCache.model, "environment_model", errors);
+    }
+  }
+  const nativeLibrary = environment.runtime_paths?.native_library;
+  if (!nativeLibrary?.effective_path ||
+      !isAbsolute(nativeLibrary.effective_path) ||
+      !nativeLibrary.runtime?.path ||
+      resolve(nativeLibrary.runtime.path) !== resolve(nativeLibrary.effective_path)) {
+    errors.push("environment_native_runtime_path_invalid");
+  } else {
+    validateTreeReceipt(
+      nativeLibrary.runtime,
+      "environment_native_runtime",
+      errors,
+    );
+  }
+
+  const fileHashes = environment.file_hashes;
+  if (!Array.isArray(fileHashes) || fileHashes.length === 0) {
+    errors.push("environment_file_hashes_missing");
+  } else {
+    const normalizedPaths = fileHashes.map((file) =>
+      normalizedReceiptPath(file?.path ?? ""));
+    if (new Set(normalizedPaths).size !== normalizedPaths.length) {
+      errors.push("environment_file_hash_duplicate");
+    }
+    for (const suffix of REQUIRED_ENVIRONMENT_FILE_SUFFIXES) {
+      if (!normalizedPaths.some((path) => path.endsWith(suffix))) {
+        errors.push(`environment_required_file_missing:${suffix}`);
+      }
+    }
+    for (const file of fileHashes) {
+      if (!file?.path ||
+          !isAbsolute(file.path) ||
+          !environment.repository?.root ||
+          !isWithin(environment.repository.root, file.path) ||
+          !existsSync(file.path) ||
+          !statSync(file.path).isFile() ||
+          file.hash_mode !== "utf8-lf" ||
+          !SHA256_PATTERN.test(file.sha256 ?? "") ||
+          sha256NormalizedText(readFileSync(file.path, "utf8")) !== file.sha256) {
+        errors.push("environment_file_hash_mismatch");
+        break;
+      }
+    }
+  }
+  return { valid: errors.length === 0, errors };
+}
+
+export function validateEnvironmentReceipt(environment, corpusValidation) {
+  try {
+    return validateEnvironmentReceiptInternal(environment, corpusValidation);
+  } catch (error) {
+    return {
+      valid: false,
+      errors: [
+        `environment_validation_error:${error?.code ?? error?.name ?? "unknown"}`,
+      ],
+    };
+  }
 }
 
 export function loadCorpus(manifestPath) {

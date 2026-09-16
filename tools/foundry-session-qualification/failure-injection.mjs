@@ -20,6 +20,7 @@ import {
   findCorpusFileReceipt,
   loadCorpus,
   validateCorpus,
+  validateEnvironmentReceipt,
   writeJson,
 } from "./qualification-lib.mjs";
 
@@ -306,9 +307,11 @@ export async function runFailureInjection({
     throw new Error(`Corpus validation failed: ${corpus.errors.join("; ")}`);
   }
   const environment = JSON.parse(readFileSync(environmentPath, "utf8"));
-  if (environment.corpus?.corpus_sha256 !== corpus.corpus_sha256 ||
-      JSON.stringify(environment.corpus?.files) !== JSON.stringify(corpus.files)) {
-    throw new Error("Failure injection environment does not match the current corpus.");
+  const environmentValidation = validateEnvironmentReceipt(environment, corpus);
+  if (!environmentValidation.valid) {
+    throw new Error(
+      `Failure injection environment is invalid: ${environmentValidation.errors.join("; ")}`,
+    );
   }
   const fixture = manifest.fixtures[0];
   const approvedSource = findCorpusFileReceipt(environment.corpus, fixture.source);

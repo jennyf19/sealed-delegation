@@ -17,6 +17,7 @@ import {
   findCorpusFileReceipt,
   loadCorpus,
   validateCorpus,
+  validateEnvironmentReceipt,
   writeJson,
 } from "./qualification-lib.mjs";
 
@@ -122,20 +123,25 @@ const environmentCandidate = JSON.parse(readFileSync(environmentCandidatePath, "
 const environment = environmentExists
   ? JSON.parse(readFileSync(environmentPath, "utf8"))
   : environmentCandidate;
+const candidateValidation = validateEnvironmentReceipt(
+  environmentCandidate,
+  corpusValidation,
+);
+if (!candidateValidation.valid) {
+  throw new Error(
+    `Environment receipt is invalid: ${candidateValidation.errors.join("; ")}`,
+  );
+}
 if (environmentCandidate.corpus.corpus_sha256 !== approvedHash) {
   throw new Error("Environment receipt corpus hash differs from the approved corpus hash.");
 }
-if (!environmentCandidate.repository.clean) {
-  throw new Error(
-    "Qualification requires a clean committed worktree so the commit SHA and file hashes are reviewable.",
-  );
-}
-for (const [key, expected] of Object.entries(TARGET_ROUTE)) {
-  if (JSON.stringify(environmentCandidate.route[key]) !== JSON.stringify(expected)) {
-    throw new Error(`Environment route field ${key} differs from the frozen target tuple.`);
-  }
-}
 if (environmentExists) {
+  const originalValidation = validateEnvironmentReceipt(environment, corpusValidation);
+  if (!originalValidation.valid) {
+    throw new Error(
+      `Original environment receipt is invalid: ${originalValidation.errors.join("; ")}`,
+    );
+  }
   const stableFields = (receipt) => ({
     commit_sha: receipt.repository.commit_sha,
     route: receipt.route,

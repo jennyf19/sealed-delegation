@@ -6,6 +6,7 @@ import {
   loadCorpus,
   readJsonLines,
   validateCorpus,
+  validateEnvironmentReceipt,
   writeJson,
 } from "./qualification-lib.mjs";
 
@@ -22,7 +23,8 @@ const environmentPathValue = valueAfter("--environment");
 const attemptPathValue = valueAfter("--attempt");
 const outputPath = resolve(valueAfter("--output") ?? "");
 const attemptNumberValue = valueAfter("--attempt-number");
-if (!manifestPath || !fixtureId || !attemptPathValue || !outputPath) {
+if (!manifestPath || !fixtureId || !attemptPathValue ||
+    !environmentPathValue || !outputPath) {
   throw new Error(
     "Usage: node grader.mjs --manifest <manifest> --fixture <id> " +
     "--attempt <attempt.json> --run <run.json> --provider-events <events.jsonl> " +
@@ -40,11 +42,23 @@ const run = runPath && existsSync(runPath)
 const raw = run?.stdout_path && existsSync(run.stdout_path)
   ? readFileSync(run.stdout_path, "utf8")
   : "";
-const environment = environmentPathValue && existsSync(resolve(environmentPathValue))
-  ? JSON.parse(readFileSync(resolve(environmentPathValue), "utf8"))
-  : null;
+const environmentPath = resolve(environmentPathValue);
+if (!existsSync(environmentPath)) {
+  throw new Error("The environment-v2 receipt is required.");
+}
+const environment = JSON.parse(readFileSync(environmentPath, "utf8"));
+const corpusValidation = validateCorpus(manifestPath);
+const environmentValidation = validateEnvironmentReceipt(
+  environment,
+  corpusValidation,
+);
+if (!environmentValidation.valid) {
+  throw new Error(
+    `Environment receipt is invalid: ${environmentValidation.errors.join("; ")}`,
+  );
+}
 const attempt = JSON.parse(readFileSync(resolve(attemptPathValue), "utf8"));
-const approvedCorpus = environment?.corpus ?? validateCorpus(manifestPath);
+const approvedCorpus = environment.corpus;
 const providerEvents = providerPathValue
   ? readJsonLines(resolve(providerPathValue))
   : [];

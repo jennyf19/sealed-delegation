@@ -121,8 +121,10 @@ or partial results.
 The runner pins a concrete copy of the executable-reported Copilot CLI binary for the duration of
 one qualification. The Windows app-execution alias is not used for child launches because it can
 advance to a newer CLI build during a long serial run. The environment receipt also records
-effective Foundry cache and native-library overrides and hashes the native runtime used by the
-adapter.
+effective Foundry cache and native-library overrides and hashes the exact resolved model-version
+directory, installed Foundry SDK package, and native runtime used by the adapter. Resume and final reporting use
+the same environment-v2 validator; a missing receipt, changed model/runtime file, changed harness
+file, or mismatched route/corpus/runtime tuple fails closed and prevents promotion.
 
 The first public n=20 run used an exact natural-language `missing_input` string and was held after
 0/20 lexical matches despite 20/20 blocked/null, correctly cited, non-fabricated results. That

@@ -8,6 +8,7 @@ import {
   readJsonLines,
   sha256File,
   validateCorpus,
+  validateEnvironmentReceipt,
   writeJson,
 } from "./qualification-lib.mjs";
 import {
@@ -48,11 +49,24 @@ const corpusValidation = validateCorpus(manifestPath);
 if (!corpusValidation.valid) {
   throw new Error(`Corpus validation failed: ${corpusValidation.errors.join("; ")}`);
 }
-const environment = environmentPath && existsSync(resolve(environmentPath))
-  ? JSON.parse(readFileSync(resolve(environmentPath), "utf8"))
-  : null;
-const approvedCorpus = environment?.corpus ?? corpusValidation;
+const resolvedEnvironmentPath = environmentPath ? resolve(environmentPath) : null;
+let environment = null;
+const environmentReadErrors = [];
+if (!resolvedEnvironmentPath || !existsSync(resolvedEnvironmentPath)) {
+  environmentReadErrors.push("environment_receipt_missing");
+} else {
+  try {
+    environment = JSON.parse(readFileSync(resolvedEnvironmentPath, "utf8"));
+  } catch {
+    environmentReadErrors.push("environment_receipt_malformed");
+  }
+}
+const environmentValidation = environmentReadErrors.length > 0
+  ? { valid: false, errors: environmentReadErrors }
+  : validateEnvironmentReceipt(environment, corpusValidation);
+const approvedCorpus = environment?.corpus ?? null;
 const environmentCorpusMatches =
+  environmentValidation.valid &&
   approvedCorpus?.corpus_sha256 === corpusValidation.corpus_sha256 &&
   JSON.stringify(approvedCorpus?.files) === JSON.stringify(corpusValidation.files);
 const allAttempts = listAttemptDirectories(resultsRoot).map((attemptRoot) => {
@@ -78,7 +92,11 @@ const allAttempts = listAttemptDirectories(resultsRoot).map((attemptRoot) => {
   if (basename(dirname(attemptRoot)) !== attempt.fixture_id) {
     artifactFailureReasons.push("attempt_directory_fixture_mismatch");
   }
-  if (!environmentCorpusMatches) artifactFailureReasons.push("environment_corpus_mismatch");
+  if (!environmentValidation.valid) {
+    artifactFailureReasons.push("environment_integrity_invalid");
+  } else if (!environmentCorpusMatches) {
+    artifactFailureReasons.push("environment_corpus_mismatch");
+  }
   if (!attempt.gate_receipt ||
       resolve(attempt.gate_receipt) !== resolve(gatePath)) {
     artifactFailureReasons.push("attempt_gate_link_mismatch");
@@ -342,6 +360,7 @@ const lifecycle = existsSync(lifecyclePath)
 
 const firstPassCount = firstAttempts.filter((attempt) => attempt?.gate_accepted).length;
 const promotionGate = {
+  environment_receipt_valid: environmentValidation.valid,
   all_first_attempts_pass:
     firstPassCount === manifest.fixtures.length && manifest.fixtures.length === 20,
   zero_fabricated_results: !attempts.some((attempt) => attempt.fabricated_result),
@@ -395,7 +414,8 @@ const report = {
   },
   total_local_tokens: totalTokens || null,
   retries: attempts.filter((attempt) => attempt.attempt_number > 1),
-  environment_receipt: environmentPath ? resolve(environmentPath) : null,
+  environment_receipt: resolvedEnvironmentPath,
+  environment_validation: environmentValidation,
   adapter_lifecycle_receipt: existsSync(lifecyclePath) ? lifecyclePath : null,
   host_and_route: environment ? {
     host: environment.host,
@@ -412,4 +432,6 @@ const report = {
 };
 writeJson(outputPath, report);
 console.log(JSON.stringify(report, null, 2));
-process.exitCode = staleAttempts.length > 0 ? 1 : (recommendation === "REJECT" ? 2 : 0);
+process.exitCode = !environmentValidation.valid || staleAttempts.length > 0
+  ? 1
+  : (recommendation === "REJECT" ? 2 : 0);
