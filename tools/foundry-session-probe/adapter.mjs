@@ -9,6 +9,20 @@ import {
   Request,
 } from "foundry-local-sdk";
 
+import {
+  PersistentSessionError,
+  PersistentSessionStore,
+  TASK_PURPOSE,
+  TRUSTED_PER_REQUEST_USAGE,
+  UNTRUSTED_CUMULATIVE_USAGE,
+  USAGE_TRUST_HEADER,
+  flattenOpenAiContent,
+  parseConversationId,
+  parseRequestPurpose,
+  persistenceOptionsFromEnv,
+  planPersistentTurn,
+} from "./persistent-session.mjs";
+
 const debugEnabled = process.env.FOUNDRY_ADAPTER_DEBUG === "1";
 const receiptPath = process.env.FOUNDRY_ADAPTER_RECEIPT_PATH;
 
@@ -26,18 +40,9 @@ function recordProviderEvent(event) {
   );
 }
 
-function textContent(content) {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .filter((part) => part?.type === "text" && typeof part.text === "string")
-    .map((part) => part.text)
-    .join("");
-}
-
 export function addOpenAiMessages(request, messages) {
   for (const message of messages ?? []) {
-    const content = textContent(message.content);
+    const content = flattenOpenAiContent(message.content);
     if (message.role === "tool") {
       request.addItem(
         Item.toolResult(message.tool_call_id ?? "", content),
@@ -78,10 +83,11 @@ export function selectedOpenAiTools(tools, toolChoice) {
   return selected;
 }
 
-export function addOpenAiTools(session, tools, toolChoice) {
+export function toOpenAiToolDefinitions(tools, toolChoice) {
+  const definitions = [];
   for (const tool of selectedOpenAiTools(tools, toolChoice)) {
     if (tool?.type !== "function" || !tool.function?.name) continue;
-    session.addToolDefinition({
+    definitions.push({
       name: tool.function.name,
       description: tool.function.description ?? "",
       jsonSchema: JSON.stringify(
@@ -93,7 +99,18 @@ export function addOpenAiTools(session, tools, toolChoice) {
       ),
     });
   }
+  return definitions;
+}
+
+export function addOpenAiTools(session, tools, toolChoice) {
+  for (const definition of toOpenAiToolDefinitions(tools, toolChoice)) {
+    session.addToolDefinition(definition);
+  }
   return session;
+}
+
+export function requestedOutputTokens(body) {
+  return body.max_tokens ?? body.max_completion_tokens ?? 1024;
 }
 
 export function toRequestOptions(body) {
@@ -105,7 +122,7 @@ export function toRequestOptions(body) {
         : "auto";
   const options = {
     search: {
-      maxOutputTokens: body.max_tokens ?? body.max_completion_tokens ?? 1024,
+      maxOutputTokens: requestedOutputTokens(body),
     },
     toolChoice: requestedToolChoice,
   };
@@ -184,7 +201,7 @@ function itemDelta(item, toolIndex) {
     return { content: item.text };
   }
   if (item.type === "message") {
-    return { content: textContent(item.content ?? item.parts) };
+    return { content: flattenOpenAiContent(item.content ?? item.parts) };
   }
   if (item.type === "toolCall") {
     return {
@@ -204,6 +221,14 @@ function itemDelta(item, toolIndex) {
   return null;
 }
 
+function toAssistantToolCall(deltaToolCall) {
+  return {
+    id: deltaToolCall.id,
+    type: "function",
+    function: { ...deltaToolCall.function },
+  };
+}
+
 async function readJson(req) {
   const chunks = [];
   let size = 0;
@@ -217,34 +242,47 @@ async function readJson(req) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 
+/**
+ * Executes one turn. By default it owns an ephemeral session, which is the qualified behaviour.
+ * The persistent experiment supplies a retained `session`, the replay `messages` delta, and
+ * pre-reconciled tool registration, and uses the returned outcome to commit session state.
+ */
 async function handleCompletion(
   res,
   model,
   body,
   {
     requestId,
+    session: retainedSession,
     createSession = (selectedModel) => new ChatSession(selectedModel),
     createRequest = () => new Request(),
     recordEvent = recordProviderEvent,
+    messages = body.messages,
+    options = toRequestOptions(body),
+    registerTools = (target) => addOpenAiTools(target, body.tools, body.tool_choice),
+    responseHeaders = {},
+    eventContext = {},
   } = {},
 ) {
-  const session = createSession(model);
+  const session = retainedSession ?? createSession(model);
+  const ownsSession = !retainedSession;
   try {
     debug("request", {
       stream: Boolean(body.stream),
-      messageRoles: (body.messages ?? []).map((message) => message.role),
+      messageRoles: (messages ?? []).map((message) => message.role),
       toolCount: body.tools?.length ?? 0,
       toolChoice: body.tool_choice ?? "auto",
     });
-    addOpenAiTools(session, body.tools, body.tool_choice);
-    const request = addOpenAiMessages(createRequest(), body.messages);
-    request.setOptions(toRequestOptions(body));
+    registerTools(session);
+    const request = addOpenAiMessages(createRequest(), messages);
+    request.setOptions(options);
 
     const id = completionId();
     const created = Math.floor(Date.now() / 1000);
 
     if (body.stream) {
       res.writeHead(200, {
+        ...responseHeaders,
         "content-type": "text/event-stream",
         "cache-control": "no-cache",
         connection: "keep-alive",
@@ -262,12 +300,14 @@ async function handleCompletion(
       const outputTypes = [];
       let streamedText = "";
       const emittedToolCallIds = new Set();
+      const emittedToolCalls = [];
       for await (const item of stream) {
         outputTypes.push(item.type);
         const delta = itemDelta(item, toolIndex);
         if (!delta) continue;
         if (item.type === "toolCall") {
           emittedToolCallIds.add(item.callId);
+          emittedToolCalls.push(...delta.tool_calls.map(toAssistantToolCall));
           toolIndex += 1;
         } else if (delta.content) {
           streamedText += delta.content;
@@ -288,16 +328,16 @@ async function handleCompletion(
           item.type === "toolCall" &&
           !emittedToolCallIds.has(item.callId)
         ) {
+          const delta = itemDelta(item, toolIndex);
           writeSse(res, {
             id,
             object: "chat.completion.chunk",
             created,
             model: model.id,
-            choices: [
-              { index: 0, delta: itemDelta(item, toolIndex), finish_reason: null },
-            ],
+            choices: [{ index: 0, delta, finish_reason: null }],
           });
           emittedToolCallIds.add(item.callId);
+          emittedToolCalls.push(...delta.tool_calls.map(toAssistantToolCall));
           toolIndex += 1;
         }
       }
@@ -338,6 +378,7 @@ async function handleCompletion(
           completion_tokens: response.usage.completionTokens,
           total_tokens: response.usage.totalTokens,
         },
+        ...eventContext,
       });
       writeSse(res, {
         id,
@@ -358,7 +399,15 @@ async function handleCompletion(
         },
       });
       res.end("data: [DONE]\n\n");
-      return;
+      return {
+        finishReason: response.finishReason,
+        usage: response.usage,
+        assistantMessage: {
+          role: "assistant",
+          content,
+          tool_calls: emittedToolCalls,
+        },
+      };
     }
 
     const response = await session.processRequest(request);
@@ -380,6 +429,7 @@ async function handleCompletion(
         completion_tokens: response.usage.completionTokens,
         total_tokens: response.usage.totalTokens,
       },
+      ...eventContext,
     });
     const toolCalls = response.output
       .filter((item) => item.type === "toolCall")
@@ -395,7 +445,7 @@ async function handleCompletion(
       toolCalls.length > 0
         ? stripToolCallMarkup(rawText)
         : unwrapNonToolCallEnvelope(rawText);
-    res.writeHead(200, { "content-type": "application/json" });
+    res.writeHead(200, { ...responseHeaders, "content-type": "application/json" });
     res.end(
       JSON.stringify({
         id,
@@ -420,9 +470,82 @@ async function handleCompletion(
         },
       }),
     );
+    return {
+      finishReason: response.finishReason,
+      usage: response.usage,
+      assistantMessage: {
+        role: "assistant",
+        content: text,
+        tool_calls: toolCalls,
+      },
+    };
   } finally {
-    session.dispose();
+    if (ownsSession) session.dispose();
   }
+}
+
+/**
+ * Experimental persistent path. One retained `ChatSession` serves one conversation identity, the
+ * replayed history is reduced to its delta, and the session commits only after a completed turn.
+ */
+async function handlePersistentCompletion(
+  res,
+  model,
+  body,
+  store,
+  { requestId, conversationId, createRequest, recordEvent },
+) {
+  return store.run(conversationId, model, async (entry, options) => {
+    const plan = planPersistentTurn({
+      committedMessages: entry.committedMessages,
+      registeredToolDefinitions: entry.toolDefinitions,
+      sessionPositionTokens: entry.sessionPositionTokens,
+      previousCeilingTokens: entry.previousCeilingTokens,
+      turnCount: entry.turnCount,
+      incomingMessages: body.messages,
+      incomingToolDefinitions: toOpenAiToolDefinitions(body.tools, body.tool_choice),
+      requestedOutputTokens: requestedOutputTokens(body),
+      ...options,
+    });
+    const requestOptions = toRequestOptions(body);
+    requestOptions.search.maxOutputTokens = plan.maxOutputTokens;
+
+    let outcome;
+    try {
+      store.registerToolDefinitions(entry, plan.toolAdditions);
+      outcome = await handleCompletion(res, model, body, {
+        requestId,
+        session: entry.session,
+        createRequest,
+        recordEvent,
+        messages: plan.deltaMessages,
+        options: requestOptions,
+        // Definitions live in the session for its lifetime and were reconciled by the planner.
+        registerTools: () => {},
+        responseHeaders: { [USAGE_TRUST_HEADER]: UNTRUSTED_CUMULATIVE_USAGE },
+        eventContext: {
+          conversation_id: conversationId,
+          request_purpose: TASK_PURPOSE,
+          session_mode: "persistent",
+          session_turn: entry.turnCount + 1,
+          max_output_tokens: plan.maxOutputTokens,
+          usage_trust: UNTRUSTED_CUMULATIVE_USAGE,
+        },
+      });
+    } catch (error) {
+      // The delta may already have advanced SDK history, so this session can never be trusted again.
+      store.markUnusable(entry, "a failed submitted turn");
+      throw error;
+    }
+
+    store.commitTurn(entry, {
+      normalizedIncoming: plan.normalizedIncoming,
+      assistantMessage: outcome.assistantMessage,
+      maxOutputTokens: plan.maxOutputTokens,
+      usage: outcome.usage,
+    });
+    return outcome;
+  });
 }
 
 export async function startAdapterServer({
@@ -434,11 +557,21 @@ export async function startAdapterServer({
   createRequest = () => new Request(),
   recordEvent = recordProviderEvent,
   onClose = async () => {},
+  persistence = persistenceOptionsFromEnv(),
 } = {}) {
   if (host !== "127.0.0.1" && host !== "localhost") {
     throw new Error("The Session adapter must bind to a loopback host.");
   }
   if (!model?.id) throw new Error("The Session adapter requires a resolved model.");
+
+  const store = persistence?.enabled
+    ? new PersistentSessionStore({
+        createSession,
+        contextLimitTokens: persistence.contextLimitTokens,
+        reservedContextTokens: persistence.reservedContextTokens,
+        charactersPerToken: persistence.charactersPerToken,
+      })
+    : null;
 
   const acceptedModels = new Set([
     ...acceptedModelIds,
@@ -447,6 +580,8 @@ export async function startAdapterServer({
   ]);
   const server = http.createServer(async (req, res) => {
     const requestId = completionId();
+    let conversationId = null;
+    let requestPurpose = TASK_PURPOSE;
     try {
       const path = new URL(req.url, `http://${req.headers.host}`).pathname;
       if (req.method === "GET" && path === "/v1/models") {
@@ -459,7 +594,34 @@ export async function startAdapterServer({
         );
         return;
       }
+      if (req.method === "POST" && path === "/v1/sessions/release") {
+        if (!store) {
+          res.writeHead(404, { "content-type": "application/json" });
+          res.end(
+            JSON.stringify({
+              error: { message: "Persistent sessions are not enabled." },
+            }),
+          );
+          return;
+        }
+        conversationId = parseConversationId(req.headers, { required: true });
+        const released = await store.release(conversationId);
+        recordEvent({
+          event: "session_released",
+          request_id: requestId,
+          resolved_model: model.id,
+          conversation_id: conversationId,
+          released,
+        });
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ released }));
+        return;
+      }
       if (req.method === "POST" && path === "/v1/chat/completions") {
+        requestPurpose = parseRequestPurpose(req.headers);
+        // A health probe must never advance retained task state, so it always runs ephemerally.
+        const persistent = Boolean(store) && requestPurpose === TASK_PURPOSE;
+        conversationId = parseConversationId(req.headers, { required: persistent });
         const body = await readJson(req);
         if (!acceptedModels.has(body.model)) {
           recordEvent({
@@ -467,6 +629,8 @@ export async function startAdapterServer({
             request_id: requestId,
             requested_model: body.model,
             resolved_model: model.id,
+            conversation_id: conversationId,
+            request_purpose: requestPurpose,
             reason: "unrecognized_model",
           });
           res.writeHead(400, { "content-type": "application/json" });
@@ -479,23 +643,46 @@ export async function startAdapterServer({
           requested_model: body.model,
           resolved_model: model.id,
           stream: Boolean(body.stream),
+          conversation_id: conversationId,
+          request_purpose: requestPurpose,
+          session_mode: persistent ? "persistent" : "ephemeral",
         });
+        if (persistent) {
+          await handlePersistentCompletion(res, model, body, store, {
+            requestId,
+            conversationId,
+            createRequest,
+            recordEvent,
+          });
+          return;
+        }
         await handleCompletion(res, model, body, {
           requestId,
           createSession,
           createRequest,
           recordEvent,
+          eventContext: {
+            conversation_id: conversationId,
+            request_purpose: requestPurpose,
+            session_mode: "ephemeral",
+            usage_trust: TRUSTED_PER_REQUEST_USAGE,
+          },
         });
         return;
       }
       res.writeHead(404, { "content-type": "application/json" });
       res.end(JSON.stringify({ error: { message: "Not found." } }));
     } catch (error) {
+      const rejected = error instanceof PersistentSessionError;
       recordEvent({
-        event: "request_failed",
+        event: rejected ? "request_rejected" : "request_failed",
         request_id: requestId,
         resolved_model: model.id,
-        finish_reason: error?.foundryFinishReason ?? null,
+        conversation_id: conversationId,
+        request_purpose: requestPurpose,
+        ...(rejected
+          ? { reason: error.code }
+          : { finish_reason: error?.foundryFinishReason ?? null }),
         headers_sent: res.headersSent,
         error: error instanceof Error ? error.message : String(error),
       });
@@ -503,10 +690,15 @@ export async function startAdapterServer({
         res.destroy(error instanceof Error ? error : new Error(String(error)));
         return;
       }
-      res.writeHead(500, { "content-type": "application/json" });
+      res.writeHead(rejected ? error.status : 500, {
+        "content-type": "application/json",
+      });
       res.end(
         JSON.stringify({
-          error: { message: error instanceof Error ? error.message : String(error) },
+          error: {
+            message: error instanceof Error ? error.message : String(error),
+            ...(rejected ? { code: error.code } : {}),
+          },
         }),
       );
     }
@@ -522,6 +714,7 @@ export async function startAdapterServer({
   return {
     baseUrl,
     model,
+    persistentSessionCount: () => store?.size ?? 0,
     async close() {
       server.closeIdleConnections?.();
       await new Promise((resolve, reject) => {
@@ -534,7 +727,18 @@ export async function startAdapterServer({
           else resolve();
         });
       });
-      await onClose();
+      try {
+        const released = store?.disposeAll() ?? 0;
+        if (released > 0) {
+          recordEvent({
+            event: "persistent_sessions_disposed",
+            resolved_model: model.id,
+            released,
+          });
+        }
+      } finally {
+        await onClose();
+      }
     },
   };
 }
@@ -546,6 +750,7 @@ export async function startAdapter({
   modelCacheDir,
   libraryPath,
   recordEvent = recordProviderEvent,
+  persistence = persistenceOptionsFromEnv(),
 } = {}) {
   if (host !== "127.0.0.1" && host !== "localhost") {
     throw new Error("The Session adapter must bind to a loopback host.");
@@ -567,6 +772,7 @@ export async function startAdapter({
       model,
       acceptedModelIds: [modelAlias],
       recordEvent,
+      persistence,
       onClose: async () => {
         try {
           if (await model.isLoaded()) await model.unload();
@@ -582,18 +788,21 @@ export async function startAdapter({
 }
 
 async function main() {
+  const persistence = persistenceOptionsFromEnv();
   const adapter = await startAdapter({
     host: process.env.FOUNDRY_ADAPTER_HOST ?? "127.0.0.1",
     port: Number(process.env.FOUNDRY_ADAPTER_PORT ?? 0),
     modelAlias: process.env.FOUNDRY_MODEL ?? "qwen2.5-7b",
     modelCacheDir: process.env.FOUNDRY_MODEL_CACHE,
     libraryPath: process.env.FOUNDRY_LIBRARY_PATH,
+    persistence,
   });
   console.log(
     JSON.stringify({
       status: "READY",
       baseUrl: adapter.baseUrl,
       model: adapter.model.id,
+      persistentSessions: persistence.enabled,
     }),
   );
 

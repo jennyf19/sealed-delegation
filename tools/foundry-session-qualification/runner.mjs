@@ -266,6 +266,9 @@ const adapter = await startAdapter({
     environment.foundry_cli.cache_location,
   libraryPath: process.env.FOUNDRY_LIBRARY_PATH,
   recordEvent,
+  // The frozen harness always grades the qualified one-session-per-request mode, even if the
+  // unqualified persistent-session experiment is enabled in the environment.
+  persistence: { enabled: false },
 });
 if (adapter.model.id !== TARGET_ROUTE.model) {
   await adapter.close();

@@ -5,7 +5,7 @@
   "scripts": {
     "probe": "node probe.mjs",
     "serve": "node adapter.mjs",
-    "test": "node --test adapter.test.mjs"
+    "test": "node --test adapter.test.mjs persistent-session.test.mjs"
   },
   "dependencies": {
     "foundry-local-sdk": "2.0.1"
