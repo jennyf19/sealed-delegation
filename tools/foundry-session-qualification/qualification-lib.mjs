@@ -30,6 +30,8 @@ const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 const REQUIRED_ENVIRONMENT_FILE_SUFFIXES = Object.freeze([
   ".github/skills/local-agent-delegation/references/approved-routes.json",
   ".github/skills/local-agent-delegation/scripts/invoke_local_agent.ps1",
+  ".github/skills/local-agent-delegation/scripts/output_policy.ps1",
+  ".github/skills/local-agent-delegation/scripts/route_policy.ps1",
   "tools/foundry-session-probe/adapter.mjs",
   "tools/foundry-session-probe/package-lock.json",
   "tools/foundry-session-qualification/attempt-execution.mjs",
@@ -42,6 +44,7 @@ const REQUIRED_ENVIRONMENT_FILE_SUFFIXES = Object.freeze([
   "tools/foundry-session-qualification/qualification-lib.mjs",
   "tools/foundry-session-qualification/report.mjs",
   "tools/foundry-session-qualification/runner.mjs",
+  "tools/foundry-session-qualification/validate-corpus.mjs",
 ]);
 
 export function sha256Bytes(value) {

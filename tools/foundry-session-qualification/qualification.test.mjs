@@ -109,6 +109,8 @@ function createEnvironmentFixture(root, corpus) {
   const requiredFiles = [
     join(repoRoot, ".github", "skills", "local-agent-delegation", "references", "approved-routes.json"),
     join(repoRoot, ".github", "skills", "local-agent-delegation", "scripts", "invoke_local_agent.ps1"),
+    join(repoRoot, ".github", "skills", "local-agent-delegation", "scripts", "output_policy.ps1"),
+    join(repoRoot, ".github", "skills", "local-agent-delegation", "scripts", "route_policy.ps1"),
     join(repoRoot, "tools", "foundry-session-probe", "adapter.mjs"),
     packageLockPath,
     join(here, "attempt-execution.mjs"),
@@ -121,6 +123,7 @@ function createEnvironmentFixture(root, corpus) {
     join(here, "qualification-lib.mjs"),
     join(here, "report.mjs"),
     join(here, "runner.mjs"),
+    join(here, "validate-corpus.mjs"),
   ];
   return {
     schema_version: "sealed-delegation/session-environment/v2",

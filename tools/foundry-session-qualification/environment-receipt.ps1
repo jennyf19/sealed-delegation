@@ -236,10 +236,13 @@ $filesToHash = @(
     (Join-Path $qualificationRoot "failure-injection-lib.mjs")
     (Join-Path $qualificationRoot "failure-injection.mjs")
     (Join-Path $qualificationRoot "report.mjs")
+    (Join-Path $qualificationRoot "validate-corpus.mjs")
     (Join-Path $qualificationRoot "environment-receipt.ps1")
     (Join-Path $adapterRoot "adapter.mjs")
     $packageLockPath
     (Join-Path $repoRoot ".github\skills\local-agent-delegation\scripts\invoke_local_agent.ps1")
+    (Join-Path $repoRoot ".github\skills\local-agent-delegation\scripts\output_policy.ps1")
+    (Join-Path $repoRoot ".github\skills\local-agent-delegation\scripts\route_policy.ps1")
 )
 
 $receipt = [ordered]@{
