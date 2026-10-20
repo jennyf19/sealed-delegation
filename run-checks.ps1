@@ -21,6 +21,12 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 & node --test (Join-Path $root "tools\route-policy.test.mjs")
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+& node --test (Join-Path $root "tools\foundry-session-probe\adapter.test.mjs")
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+& node --test (Join-Path $root "tools\foundry-session-qualification\qualification.test.mjs")
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 & node --test (Join-Path $root "tools\byom-intake\validate-candidate.test.mjs")
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 

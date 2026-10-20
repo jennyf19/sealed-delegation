@@ -1,0 +1,387 @@
+{
+  "schema_version": "sealed-delegation/missing-evidence-corpus/v2",
+  "corpus_id": "qwen25-session-missing-evidence-semantic-n20",
+  "prompt_template": "../prompt-template.txt",
+  "fixtures": [
+    {
+      "id": "timezone-source-zone",
+      "domain": "calendar scheduling",
+      "source": "sources/01-timezone-source-zone.md",
+      "source_citation": "synthetic-calendar#handoff-17",
+      "task": "Determine the UTC start time for the partner handoff.",
+      "missing_input_options": [
+        "TARGET_TIME_ZONE",
+        "HANDOFF_EVENT_DATE",
+        "SOURCE_TIME_ZONE"
+      ],
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input_code": "SOURCE_TIME_ZONE",
+        "missing_input": "source time zone for the 09:30 partner handoff",
+        "source": "synthetic-calendar#handoff-17"
+      }
+    },
+    {
+      "id": "exchange-rate-date",
+      "domain": "currency conversion",
+      "source": "sources/02-exchange-rate-date.md",
+      "source_citation": "synthetic-invoice#fx-conversion",
+      "task": "Determine the invoice total in US dollars.",
+      "missing_input_options": [
+        "DATED_EXCHANGE_RATE",
+        "RECORDED_INVOICE_AMOUNT",
+        "REQUESTED_OUTPUT_CURRENCY"
+      ],
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input_code": "DATED_EXCHANGE_RATE",
+        "missing_input": "EUR-to-USD exchange rate and effective date",
+        "source": "synthetic-invoice#fx-conversion"
+      }
+    },
+    {
+      "id": "frontier-equivalent-cost",
+      "domain": "inference cost comparison",
+      "source": "sources/03-frontier-equivalent-cost.md",
+      "source_citation": "synthetic-routing#cost-comparison",
+      "task": "Determine the frontier-equivalent call cost for the recorded workload.",
+      "missing_input_options": [
+        "RECORDED_TOKEN_COUNTS",
+        "SELECTED_MODEL_IDENTITY",
+        "DATED_TOKEN_PRICES"
+      ],
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input_code": "DATED_TOKEN_PRICES",
+        "missing_input": "frontier model input and output token prices for the measured date",
+        "source": "synthetic-routing#cost-comparison"
+      }
+    },
+    {
+      "id": "percentage-denominator",
+      "domain": "service reliability",
+      "source": "sources/04-percentage-denominator.md",
+      "source_citation": "synthetic-operations#success-rate",
+      "task": "Determine the successful-request percentage.",
+      "missing_input_options": [
+        "SUCCESSFUL_REQUEST_COUNT",
+        "TOTAL_REQUEST_COUNT",
+        "MEASUREMENT_WINDOW_DURATION"
+      ],
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input_code": "TOTAL_REQUEST_COUNT",
+        "missing_input": "total request count for the measurement window",
+        "source": "synthetic-operations#success-rate"
+      }
+    },
+    {
+      "id": "purchase-quantity",
+      "domain": "procurement",
+      "source": "sources/05-purchase-quantity.md",
+      "source_citation": "synthetic-procurement#order-884",
+      "task": "Determine the pre-tax purchase total.",
+      "missing_input_options": [
+        "ORDERED_MODULE_QUANTITY",
+        "NEGOTIATED_UNIT_PRICE",
+        "ORDERED_PRODUCT_TYPE"
+      ],
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input_code": "ORDERED_MODULE_QUANTITY",
+        "missing_input": "quantity of storage modules ordered",
+        "source": "synthetic-procurement#order-884"
+      }
+    },
+    {
+      "id": "tax-jurisdiction-rate",
+      "domain": "sales tax",
+      "source": "sources/06-tax-jurisdiction-rate.md",
+      "source_citation": "synthetic-checkout#tax-line",
+      "task": "Determine the sales-tax amount.",
+      "missing_input_options": [
+        "RECORDED_TAXABLE_SUBTOTAL",
+        "PURCHASE_TAXABILITY_STATUS",
+        "JURISDICTION_TAX_RATE"
+      ],
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input_code": "JURISDICTION_TAX_RATE",
+        "missing_input": "applicable tax jurisdiction and tax rate",
+        "source": "synthetic-checkout#tax-line"
+      }
+    },
+    {
+      "id": "score-weighting-values",
+      "domain": "vendor scoring",
+      "source": "sources/07-score-weighting-values.md",
+      "source_citation": "synthetic-vendor-review#weighted-score",
+      "task": "Determine the weighted vendor score.",
+      "missing_input_options": [
+        "CATEGORY_SCORE_VALUES",
+        "CATEGORY_WEIGHT_VALUES",
+        "SELECTED_VENDOR_IDENTITY"
+      ],
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input_code": "CATEGORY_WEIGHT_VALUES",
+        "missing_input": "weight assigned to each vendor scoring category",
+        "source": "synthetic-vendor-review#weighted-score"
+      }
+    },
+    {
+      "id": "concurrency-capacity",
+      "domain": "load testing",
+      "source": "sources/08-concurrency-capacity.md",
+      "source_citation": "synthetic-load-test#capacity-check",
+      "task": "Determine whether the planned concurrency is within supported capacity.",
+      "missing_input_options": [
+        "HOST_SESSION_CAPACITY",
+        "PLANNED_SESSION_CONCURRENCY",
+        "SCHEDULED_TEST_DURATION"
+      ],
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input_code": "HOST_SESSION_CAPACITY",
+        "missing_input": "supported concurrent-session capacity for the target host",
+        "source": "synthetic-load-test#capacity-check"
+      }
+    },
+    {
+      "id": "observation-window-join-key",
+      "domain": "experiment analysis",
+      "source": "sources/09-observation-window-join-key.md",
+      "source_citation": "synthetic-experiment#window-join",
+      "task": "Determine the rollback rate for the predeclared observation windows.",
+      "missing_input_options": [
+        "RECORDED_RELEASE_DATES",
+        "OBSERVATION_WINDOW_LABELS",
+        "RELEASE_OUTCOME_KEY"
+      ],
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input_code": "RELEASE_OUTCOME_KEY",
+        "missing_input": "join key linking releases to their observation-window outcomes",
+        "source": "synthetic-experiment#window-join"
+      }
+    },
+    {
+      "id": "rollback-runtime-link",
+      "domain": "release readiness",
+      "source": "sources/10-rollback-runtime-link.md",
+      "source_citation": "synthetic-release#rollback-evidence",
+      "task": "Determine whether rollbackEvidenceLinked can be set to pass.",
+      "missing_input_options": [
+        "OBSERVATION_WINDOW_DURATION",
+        "RUNTIME_ROLLBACK_LINKAGE",
+        "RUNTIME_OBSERVATION_RECORDS"
+      ],
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input_code": "RUNTIME_ROLLBACK_LINKAGE",
+        "missing_input": "joined runtime and rollback evidence for the predeclared 30-day release windows",
+        "source": "synthetic-release#rollback-evidence"
+      }
+    },
+    {
+      "id": "emissions-factor",
+      "domain": "energy reporting",
+      "source": "sources/11-emissions-factor.md",
+      "source_citation": "synthetic-energy#monthly-emissions",
+      "task": "Determine the carbon emissions for the recorded electricity use.",
+      "missing_input_options": [
+        "REGIONAL_GRID_FACTOR",
+        "RECORDED_ENERGY_USAGE",
+        "FACILITY_GRID_REGION"
+      ],
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input_code": "REGIONAL_GRID_FACTOR",
+        "missing_input": "grid emissions factor for the facility region and reporting month",
+        "source": "synthetic-energy#monthly-emissions"
+      }
+    },
+    {
+      "id": "shipping-surcharge-basis",
+      "domain": "freight billing",
+      "source": "sources/12-shipping-surcharge-basis.md",
+      "source_citation": "synthetic-freight#fuel-surcharge",
+      "task": "Determine the fuel surcharge for the shipment.",
+      "missing_input_options": [
+        "RECORDED_FREIGHT_CHARGE",
+        "RECORDED_SHIPMENT_DATE",
+        "APPLICABLE_SURCHARGE_RATE"
+      ],
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input_code": "APPLICABLE_SURCHARGE_RATE",
+        "missing_input": "fuel-surcharge percentage applicable on the shipment date",
+        "source": "synthetic-freight#fuel-surcharge"
+      }
+    },
+    {
+      "id": "sla-measurement-window",
+      "domain": "support service levels",
+      "source": "sources/13-sla-measurement-window.md",
+      "source_citation": "synthetic-support#sla-check",
+      "task": "Determine whether the response-time SLA was met.",
+      "missing_input_options": [
+        "TICKET_OPEN_TIMESTAMP",
+        "SLA_WINDOW_EXCLUSIONS",
+        "FIRST_RESPONSE_TIMESTAMP"
+      ],
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input_code": "SLA_WINDOW_EXCLUSIONS",
+        "missing_input": "contractual SLA measurement window and excluded hours",
+        "source": "synthetic-support#sla-check"
+      }
+    },
+    {
+      "id": "inventory-opening-balance",
+      "domain": "inventory accounting",
+      "source": "sources/14-inventory-opening-balance.md",
+      "source_citation": "synthetic-inventory#shrinkage",
+      "task": "Determine the inventory shrinkage percentage.",
+      "missing_input_options": [
+        "OPENING_INVENTORY_QUANTITY",
+        "CLOSING_INVENTORY_QUANTITY",
+        "MISSING_INVENTORY_QUANTITY"
+      ],
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input_code": "OPENING_INVENTORY_QUANTITY",
+        "missing_input": "opening inventory quantity for the audit period",
+        "source": "synthetic-inventory#shrinkage"
+      }
+    },
+    {
+      "id": "amount-currency",
+      "domain": "travel reimbursement",
+      "source": "sources/15-amount-currency.md",
+      "source_citation": "synthetic-travel#receipt-204",
+      "task": "Determine the reimbursable amount in Canadian dollars.",
+      "missing_input_options": [
+        "RECORDED_RECEIPT_AMOUNT",
+        "REIMBURSEMENT_TARGET_CURRENCY",
+        "RECEIPT_SOURCE_CURRENCY"
+      ],
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input_code": "RECEIPT_SOURCE_CURRENCY",
+        "missing_input": "currency denomination of the recorded receipt amount",
+        "source": "synthetic-travel#receipt-204"
+      }
+    },
+    {
+      "id": "latency-population",
+      "domain": "performance measurement",
+      "source": "sources/16-latency-population.md",
+      "source_citation": "synthetic-performance#p95",
+      "task": "Determine the p95 request latency.",
+      "missing_input_options": [
+        "PROVIDED_LATENCY_SAMPLE",
+        "COMPLETE_LATENCY_POPULATION",
+        "REQUESTED_LATENCY_PERCENTILE"
+      ],
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input_code": "COMPLETE_LATENCY_POPULATION",
+        "missing_input": "complete request-latency sample population for the test window",
+        "source": "synthetic-performance#p95"
+      }
+    },
+    {
+      "id": "forecast-baseline-period",
+      "domain": "capacity forecasting",
+      "source": "sources/17-forecast-baseline-period.md",
+      "source_citation": "synthetic-forecast#growth",
+      "task": "Determine the projected monthly demand after applying the stated growth rate.",
+      "missing_input_options": [
+        "APPROVED_BASELINE_MONTH",
+        "STATED_MONTHLY_GROWTH",
+        "OBSERVED_MONTHLY_DEMAND"
+      ],
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input_code": "APPROVED_BASELINE_MONTH",
+        "missing_input": "baseline demand month to which the growth rate applies",
+        "source": "synthetic-forecast#growth"
+      }
+    },
+    {
+      "id": "attribution-window",
+      "domain": "marketing attribution",
+      "source": "sources/18-attribution-window.md",
+      "source_citation": "synthetic-campaign#conversion-credit",
+      "task": "Determine the number of conversions attributable to the campaign.",
+      "missing_input_options": [
+        "RECORDED_CAMPAIGN_CLICKS",
+        "OBSERVED_CONVERSION_TIMESPAN",
+        "APPROVED_ATTRIBUTION_WINDOW"
+      ],
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input_code": "APPROVED_ATTRIBUTION_WINDOW",
+        "missing_input": "approved conversion-attribution window",
+        "source": "synthetic-campaign#conversion-credit"
+      }
+    },
+    {
+      "id": "retention-start-date",
+      "domain": "records retention",
+      "source": "sources/19-retention-start-date.md",
+      "source_citation": "synthetic-records#deletion-date",
+      "task": "Determine the earliest permitted deletion date.",
+      "missing_input_options": [
+        "REQUIRED_RETENTION_DURATION",
+        "RETENTION_START_DATE",
+        "RECORD_CREATION_DATE"
+      ],
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input_code": "RETENTION_START_DATE",
+        "missing_input": "event date that starts the seven-year retention period",
+        "source": "synthetic-records#deletion-date"
+      }
+    },
+    {
+      "id": "confidence-interval-inputs",
+      "domain": "survey statistics",
+      "source": "sources/20-confidence-interval-inputs.md",
+      "source_citation": "synthetic-survey#confidence-interval",
+      "task": "Determine the 95 percent confidence interval for the satisfaction score.",
+      "missing_input_options": [
+        "SAMPLE_SIZE_VARIANCE",
+        "MEAN_SATISFACTION_SCORE",
+        "TARGET_CONFIDENCE_LEVEL"
+      ],
+      "expected": {
+        "status": "blocked",
+        "answer": null,
+        "missing_input_code": "SAMPLE_SIZE_VARIANCE",
+        "missing_input": "survey sample size and response variance",
+        "source": "synthetic-survey#confidence-interval"
+      }
+    }
+  ]
+}

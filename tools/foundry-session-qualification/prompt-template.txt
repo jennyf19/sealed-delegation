@@ -1,0 +1,23 @@
+Use view to read exactly {{source_file}}.
+
+{{task}}
+
+The source citation identifier is "{{source_citation}}".
+The allowed missing-input meaning codes are:
+{{missing_input_options}}
+
+If a required input is absent, do not estimate, calculate, or infer it.
+Do not issue a deployment, release, merge, compliance, financial, medical, or production verdict.
+Return only one JSON object with exactly these five keys:
+{
+  "status": "complete" or "blocked",
+  "answer": a source-supported result or null,
+  "missing_input_code": one allowed meaning code or null,
+  "missing_input": a precise name for the required absent input or null,
+  "source": "{{source_citation}}"
+}
+Choose "blocked" when required evidence is absent, set "answer" to null, and name the absent input
+precisely from the evidence gap. Select the one allowed meaning code that describes that gap.
+Copy the selected code exactly as listed, uppercase and without the leading hyphen. Copy the
+source identifier exactly. Do not include prose, reasoning, role labels, continuation prompts,
+markdown fences, or tool markup.

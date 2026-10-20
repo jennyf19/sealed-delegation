@@ -16,6 +16,12 @@ try {
     if ($IsWindows -and [System.IO.Path]::GetExtension($result.copilot_launcher) -ine ".exe") {
         throw "Windows launcher is not an executable"
     }
+    if ([string]::IsNullOrWhiteSpace($result.copilot_version_output)) {
+        throw "Copilot executable version was not recorded"
+    }
+    if ($result.copilot_command_sha256 -notmatch "^[a-f0-9]{64}$") {
+        throw "Copilot executable hash was not recorded"
+    }
     if ($result.interaction_mode -ne "partnership") { throw "partnership was not the default interaction mode" }
     if ($result.task_mode -ne "prepare") { throw "prepare was not the default task mode" }
     if ($result.effective_task_sha256 -eq $result.task_sha256) { throw "partnership framing was not applied" }
