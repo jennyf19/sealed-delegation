@@ -210,6 +210,38 @@ test("records an SDK length terminal reason for fail-closed grading", async () =
     assert.match(body, /"finish_reason":"length"/);
     assert.equal(events.at(-1).event, "request_completed");
     assert.equal(events.at(-1).finish_reason, "length");
+    assert.ok(events.every((event) => event.request_purpose === "task"));
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("marks health probe events without hiding a length terminal reason", async () => {
+  const events = [];
+  const adapter = await startAdapterServer({
+    model: { id: "qwen2.5-7b-instruct-generic-gpu:4" },
+    createSession: () => fakeSession(responseFixture("length")),
+    createRequest: () => ({ setOptions() {} }),
+    recordEvent: (event) => events.push(event),
+  });
+  try {
+    const response = await fetch(`${adapter.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-sealed-delegation-request-purpose": "health",
+      },
+      body: JSON.stringify({
+        model: "qwen2.5-7b-instruct-generic-gpu:4",
+        stream: true,
+        messages: [],
+      }),
+    });
+    await response.text();
+    assert.equal(response.status, 200);
+    assert.equal(events.length, 2);
+    assert.ok(events.every((event) => event.request_purpose === "health"));
+    assert.equal(events.at(-1).finish_reason, "length");
   } finally {
     await adapter.close();
   }
@@ -227,7 +259,10 @@ test("records and terminates an SDK error response", async () => {
     await assert.rejects(async () => {
       const response = await fetch(`${adapter.baseUrl}/chat/completions`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          "x-sealed-delegation-request-purpose": "health",
+        },
         body: JSON.stringify({
           model: "qwen2.5-7b-instruct-generic-gpu:4",
           stream: true,
@@ -238,6 +273,32 @@ test("records and terminates an SDK error response", async () => {
     });
     assert.equal(events.at(-1).event, "request_failed");
     assert.equal(events.at(-1).finish_reason, "error");
+    assert.ok(events.every((event) => event.request_purpose === "health"));
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("rejects an unknown request purpose before creating a session", async () => {
+  const events = [];
+  const adapter = await startAdapterServer({
+    model: { id: "qwen2.5-7b-instruct-generic-gpu:4" },
+    createSession: () => {
+      throw new Error("session should not be created");
+    },
+    recordEvent: (event) => events.push(event),
+  });
+  try {
+    const response = await fetch(`${adapter.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-sealed-delegation-request-purpose": "unknown",
+      },
+      body: "{}",
+    });
+    assert.equal(response.status, 400);
+    assert.equal(events.at(-1).reason, "unrecognized_request_purpose");
   } finally {
     await adapter.close();
   }

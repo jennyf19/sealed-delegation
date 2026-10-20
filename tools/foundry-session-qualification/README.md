@@ -95,6 +95,14 @@ The runner:
   manager in `finally`;
 - writes `analysis.json`.
 
+The launcher's health request carries `X-Sealed-Delegation-Request-Purpose: health`.
+The adapter records that purpose on its request events; ordinary unmarked Copilot requests are
+tasks. Health events remain in the raw telemetry but do not participate in task finish-reason or
+terminal-event checks, and health-only telemetry cannot satisfy a task's evidence requirement.
+The report separates `task_local_tokens` and `health_probe_local_tokens`; `total_local_tokens`
+retains both for all-in cost accounting. Historical unmarked events retain their original task
+classification, and frozen results are not rewritten.
+
 The runner never silently retries. Resume skips every fixture with an existing attempt:
 
 ```powershell

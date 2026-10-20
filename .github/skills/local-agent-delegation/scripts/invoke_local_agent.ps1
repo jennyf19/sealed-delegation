@@ -117,6 +117,7 @@ function Get-FoundryUrl {
 }
 
 function Invoke-ModelHealth([string]$ApiRoot) {
+    $headers = @{ "X-Sealed-Delegation-Request-Purpose" = "health" }
     $body = @{
         model = $Model
         temperature = 0
@@ -124,9 +125,9 @@ function Invoke-ModelHealth([string]$ApiRoot) {
         messages = @(@{ role = "user"; content = "Reply exactly READY" })
     } | ConvertTo-Json -Depth 5
     if ($AllowRemoteEndpoint) {
-        Invoke-RestMethod "$ApiRoot/chat/completions" -Method Post -ContentType "application/json" -Body $body -TimeoutSec 120 -MaximumRedirection 0
+        Invoke-RestMethod "$ApiRoot/chat/completions" -Method Post -Headers $headers -ContentType "application/json" -Body $body -TimeoutSec 120 -MaximumRedirection 0
     } else {
-        Invoke-RestMethod "$ApiRoot/chat/completions" -Method Post -ContentType "application/json" -Body $body -TimeoutSec 120 -NoProxy -MaximumRedirection 0
+        Invoke-RestMethod "$ApiRoot/chat/completions" -Method Post -Headers $headers -ContentType "application/json" -Body $body -TimeoutSec 120 -NoProxy -MaximumRedirection 0
     }
 }
 

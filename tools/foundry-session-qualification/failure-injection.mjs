@@ -207,6 +207,7 @@ async function withHealthProbe(endpoint) {
     const isHealthProbe =
       request.method === "POST" &&
       request.url === "/v1/chat/completions" &&
+      request.headers["x-sealed-delegation-request-purpose"] === "health" &&
       Array.isArray(messages) &&
       messages.length === 1 &&
       messages[0]?.role === "user" &&

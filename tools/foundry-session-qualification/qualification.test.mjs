@@ -25,6 +25,7 @@ import {
   sha256Bytes,
   sha256File,
   sha256NormalizedText,
+  summarizeProviderUsage,
   validateCorpus,
   validateEnvironmentReceipt,
 } from "./qualification-lib.mjs";
@@ -389,6 +390,44 @@ test("accepts a paraphrase with the correct frozen meaning code", () => {
       providerEvents,
     });
     assert.equal(gate.gate_accepted, true, gate.failure_reasons.join(", "));
+    const healthEvents = [
+      {
+        event: "request_started",
+        request_id: "health-1",
+        request_purpose: "health",
+        resolved_model: TARGET_ROUTE.model,
+      },
+      {
+        event: "request_completed",
+        request_id: "health-1",
+        request_purpose: "health",
+        resolved_model: TARGET_ROUTE.model,
+        finish_reason: "length",
+      },
+    ];
+    const gradeWithEvents = (events) => gradeAttempt({
+      fixture,
+      run,
+      raw: JSON.stringify({
+        ...fixture.expected,
+        missing_input: "the originating locale's time-zone designation",
+      }),
+      providerEvents: events,
+    });
+    const withHealth = gradeWithEvents([...healthEvents, ...providerEvents]);
+    assert.equal(withHealth.gate_accepted, true, withHealth.failure_reasons.join(", "));
+    assert.equal(withHealth.provider_event_count, 2);
+    assert.deepEqual(withHealth.provider_finish_reasons, ["stop"]);
+    const healthOnly = gradeWithEvents(healthEvents);
+    assert.equal(healthOnly.gate_accepted, false);
+    assert.ok(healthOnly.failure_reasons.includes("provider_telemetry_missing"));
+    const taskLength = gradeWithEvents([
+      ...healthEvents,
+      providerEvents[0],
+      { ...providerEvents[1], finish_reason: "length" },
+    ]);
+    assert.equal(taskLength.gate_accepted, false);
+    assert.ok(taskLength.failure_reasons.includes("provider_finish_length"));
   } finally {
     rmSync(temporary, { recursive: true, force: true });
   }
@@ -408,6 +447,21 @@ test("rejects authority language hidden in missing_input", () => {
   });
   assert.equal(gate.authority_violation, true);
   assert.ok(gate.failure_reasons.includes("authority_language"));
+});
+
+test("separates health-probe tokens while retaining all-in usage", () => {
+  const usage = summarizeProviderUsage([
+    { event: "request_started", request_purpose: "health", usage: { total_tokens: 100 } },
+    { event: "request_completed", request_purpose: "health", usage: { total_tokens: 8 } },
+    { event: "request_completed", request_purpose: "task", usage: { total_tokens: 12 } },
+    { event: "request_completed", usage: { total_tokens: 3 } },
+    { event: "request_failed", request_purpose: "health", usage: { total_tokens: 100 } },
+  ]);
+  assert.deepEqual(usage, {
+    total_tokens: 23,
+    task_tokens: 15,
+    health_probe_tokens: 8,
+  });
 });
 
 test("report re-grades raw artifacts instead of trusting gate.json", () => {

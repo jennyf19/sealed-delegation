@@ -7,6 +7,7 @@ import {
   loadCorpus,
   readJsonLines,
   sha256File,
+  summarizeProviderUsage,
   validateCorpus,
   validateEnvironmentReceipt,
   writeJson,
@@ -227,9 +228,9 @@ const firstAttempts = manifest.fixtures.map((fixture) =>
 const walls = attempts
   .map((attempt) => attempt.elapsed_seconds)
   .filter((value) => Number.isFinite(value));
-const totalTokens = attempts.flatMap((attempt) => attempt.provider_events)
-  .filter((event) => event.event === "request_completed")
-  .reduce((sum, event) => sum + (Number(event.usage?.total_tokens) || 0), 0);
+const tokenUsage = summarizeProviderUsage(
+  attempts.flatMap((attempt) => attempt.provider_events),
+);
 const failureSummary = failureSummaryPath && existsSync(resolve(failureSummaryPath))
   ? JSON.parse(readFileSync(resolve(failureSummaryPath), "utf8"))
   : null;
@@ -412,7 +413,9 @@ const report = {
     p95: percentile(walls, 0.95),
     max: walls.length ? Math.max(...walls) : null,
   },
-  total_local_tokens: totalTokens || null,
+  total_local_tokens: tokenUsage.total_tokens || null,
+  task_local_tokens: attempts.length ? tokenUsage.task_tokens : null,
+  health_probe_local_tokens: attempts.length ? tokenUsage.health_probe_tokens : null,
   retries: attempts.filter((attempt) => attempt.attempt_number > 1),
   environment_receipt: resolvedEnvironmentPath,
   environment_validation: environmentValidation,

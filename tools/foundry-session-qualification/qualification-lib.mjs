@@ -493,6 +493,18 @@ function stringValues(value) {
   return [];
 }
 
+export function summarizeProviderUsage(providerEvents) {
+  const usage = { total_tokens: 0, task_tokens: 0, health_probe_tokens: 0 };
+  for (const event of providerEvents) {
+    if (event.event !== "request_completed") continue;
+    const tokens = Number(event.usage?.total_tokens) || 0;
+    usage.total_tokens += tokens;
+    if (event.request_purpose === "health") usage.health_probe_tokens += tokens;
+    else usage.task_tokens += tokens;
+  }
+  return usage;
+}
+
 export function gradeAttempt({
   fixture,
   run = null,
@@ -664,9 +676,11 @@ export function gradeAttempt({
   if (continuationLeak) reasons.push("continuation_prompt_leak");
   if (toolMarkupLeak) reasons.push("raw_tool_markup");
 
+  const taskProviderEvents = providerEvents.filter((event) =>
+    event.request_purpose !== "health");
   const scopedProviderEvents = attemptNumber === null
-    ? providerEvents
-    : providerEvents.filter((event) =>
+    ? taskProviderEvents
+    : taskProviderEvents.filter((event) =>
         event.fixture_id === fixture.id && event.attempt_number === attemptNumber);
   const startedEvents = scopedProviderEvents.filter((event) => event.event === "request_started");
   const completedEvents = scopedProviderEvents.filter((event) => event.event === "request_completed");

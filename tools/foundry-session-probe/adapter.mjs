@@ -466,6 +466,12 @@ export async function startAdapterServer({
   const server = http.createServer((req, res) => {
     const handler = (async () => {
       const requestId = completionId();
+      const requestPurpose =
+        req.headers["x-sealed-delegation-request-purpose"] ?? "task";
+      const recordRequestEvent = (event) => recordEvent({
+        ...event,
+        request_purpose: requestPurpose,
+      });
       try {
         if (closing) {
           res.writeHead(503, { "content-type": "application/json" });
@@ -484,9 +490,20 @@ export async function startAdapterServer({
           return;
         }
         if (req.method === "POST" && path === "/v1/chat/completions") {
+          if (!["task", "health"].includes(requestPurpose)) {
+            recordRequestEvent({
+              event: "request_rejected",
+              request_id: requestId,
+              resolved_model: model.id,
+              reason: "unrecognized_request_purpose",
+            });
+            res.writeHead(400, { "content-type": "application/json" });
+            res.end(JSON.stringify({ error: { message: "Unrecognized request purpose." } }));
+            return;
+          }
           const body = await readJson(req);
           if (!acceptedModels.has(body.model)) {
-            recordEvent({
+            recordRequestEvent({
               event: "request_rejected",
               request_id: requestId,
               requested_model: body.model,
@@ -497,7 +514,7 @@ export async function startAdapterServer({
             res.end(JSON.stringify({ error: { message: "Unrecognized model." } }));
             return;
           }
-          recordEvent({
+          recordRequestEvent({
             event: "request_started",
             request_id: requestId,
             requested_model: body.model,
@@ -508,9 +525,12 @@ export async function startAdapterServer({
             requestId,
             createSession,
             createRequest,
-            recordEvent,
+            recordEvent: recordRequestEvent,
             registerOperation(operation) {
-              activeOperations.set(requestId, operation);
+              activeOperations.set(requestId, {
+                ...operation,
+                recordEvent: recordRequestEvent,
+              });
               if (closing) operation.cancel();
               return () => activeOperations.delete(requestId);
             },
@@ -520,7 +540,7 @@ export async function startAdapterServer({
         res.writeHead(404, { "content-type": "application/json" });
         res.end(JSON.stringify({ error: { message: "Not found." } }));
       } catch (error) {
-        recordEvent({
+        recordRequestEvent({
           event: "request_failed",
           request_id: requestId,
           resolved_model: model.id,
@@ -569,7 +589,7 @@ export async function startAdapterServer({
           try {
             operation.cancel();
           } catch (error) {
-            recordEvent({
+            operation.recordEvent({
               event: "request_cancel_failed",
               request_id: requestId,
               resolved_model: model.id,
