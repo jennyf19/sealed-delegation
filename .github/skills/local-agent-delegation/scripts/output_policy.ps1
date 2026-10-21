@@ -20,7 +20,7 @@ function Get-LocalAgentOutputFailureReason {
         return "serialization_noise_stdout"
     }
 
-    $rawToolCallPattern = "(?s)<tool_call>\s*(?:\{|<function(?:=|>))"
+    $rawToolCallPattern = "(?s)(?:<tool_call>\s*(?:\{|<function(?:=|>))|<function=[^>\s]+>\s*<parameter=[^>\s]+>)"
     if ($semanticOutput -match $rawToolCallPattern) {
         return "raw_tool_call_markup"
     }

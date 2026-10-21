@@ -67,6 +67,9 @@ try {
 Local output is a proposal. Process exit zero, fluent prose, or local confidence are not evidence.
 The caller must verify receipts, inspect artifacts directly, and run an independent gate.
 
+Leaked tool-call markup, including unwrapped `<function=...>` / `<parameter=...>` calls, is
+`INVALID_OUTPUT` even when followed by an apparent final answer. Do not execute or repair it.
+
 `evidence-check` may propose a missing-input `BLOCK`; accept it only after confirming that the
 named input is absent from the supplied evidence.
 

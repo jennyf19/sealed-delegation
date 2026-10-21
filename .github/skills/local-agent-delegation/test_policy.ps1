@@ -176,8 +176,18 @@ try {
     if ((Get-LocalAgentOutputFailureReason $reasoningLeak) -ne "raw_tool_call_markup") {
         throw "reasoning-prefixed raw tool-call markup was not rejected"
     }
+    $unwrappedToolCall = "<function=view>`n<parameter=path>canary.txt</parameter>`n</function>"
+    if ((Get-LocalAgentOutputFailureReason $unwrappedToolCall) -ne "raw_tool_call_markup") {
+        throw "unwrapped function/parameter tool-call markup was not rejected"
+    }
+    if ((Get-LocalAgentOutputFailureReason "$unwrappedToolCall`nCANARY: fabricated") -ne "raw_tool_call_markup") {
+        throw "unwrapped tool-call markup with an apparent final answer was not rejected"
+    }
     if ($null -ne (Get-LocalAgentOutputFailureReason "The docs mention <tool_call> markup.")) {
         throw "a prose reference to tool-call markup was rejected"
+    }
+    if ($null -ne (Get-LocalAgentOutputFailureReason "The docs mention <function=view> and <parameter=path> markup.")) {
+        throw "a prose reference to function/parameter markup was rejected"
     }
     if ($null -ne (Get-LocalAgentOutputFailureReason '{"result":"ok"}')) {
         throw "valid output was rejected"
