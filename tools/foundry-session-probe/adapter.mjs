@@ -35,23 +35,23 @@ function textContent(content) {
     .join("");
 }
 
-export function addOpenAiMessages(request, messages) {
+export function addOpenAiMessages(request, messages, itemFactory = Item) {
   for (const message of messages ?? []) {
     const content = textContent(message.content);
     if (message.role === "tool") {
       request.addItem(
-        Item.toolResult(message.tool_call_id ?? "", content),
+        itemFactory.toolResult(message.tool_call_id ?? "", content),
       );
     } else {
       if (content) {
-        request.addItem(Item.message(message.role, content));
+        request.addItem(itemFactory.message(message.role, content));
       }
     }
 
     if (message.role === "assistant") {
       for (const call of message.tool_calls ?? []) {
         request.addItem(
-          Item.toolCall(
+          itemFactory.toolCall(
             call.id,
             call.function?.name ?? "",
             call.function?.arguments ?? "{}",
@@ -225,6 +225,7 @@ async function handleCompletion(
     requestId,
     createSession = (selectedModel) => new ChatSession(selectedModel),
     createRequest = () => new Request(),
+    itemFactory = Item,
     recordEvent = recordProviderEvent,
     registerOperation = () => () => {},
   } = {},
@@ -239,7 +240,7 @@ async function handleCompletion(
       toolChoice: body.tool_choice ?? "auto",
     });
     addOpenAiTools(session, body.tools, body.tool_choice);
-    const request = addOpenAiMessages(createRequest(), body.messages);
+    const request = addOpenAiMessages(createRequest(), body.messages, itemFactory);
     request.setOptions(toRequestOptions(body));
     const abortController = new AbortController();
     unregisterOperation = registerOperation({
@@ -446,6 +447,7 @@ export async function startAdapterServer({
   acceptedModelIds = [],
   createSession = (selectedModel) => new ChatSession(selectedModel),
   createRequest = () => new Request(),
+  itemFactory = Item,
   recordEvent = recordProviderEvent,
   onClose = async () => {},
 } = {}) {
@@ -525,6 +527,7 @@ export async function startAdapterServer({
             requestId,
             createSession,
             createRequest,
+            itemFactory,
             recordEvent: recordRequestEvent,
             registerOperation(operation) {
               activeOperations.set(requestId, {

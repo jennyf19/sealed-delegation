@@ -102,6 +102,26 @@ test("maps OpenAI function tools", () => {
   assert.deepEqual(JSON.parse(definitions[0].jsonSchema).required, ["path"]);
 });
 
+test("uses the selected SDK item factory for messages and tool history", () => {
+  const items = [];
+  const factory = Object.fromEntries(
+    ["message", "toolCall", "toolResult"].map((name) => [
+      name, (...args) => ({ factory: name, args }),
+    ]),
+  );
+  addOpenAiMessages({ addItem: (item) => items.push(item) }, [
+    { role: "assistant", content: "Reading", tool_calls: [
+      { id: "call-1", function: { name: "view", arguments: '{"path":"a.txt"}' } },
+    ] },
+    { role: "tool", tool_call_id: "call-1", content: "evidence" },
+  ], factory);
+  assert.deepEqual(items, [
+    { factory: "message", args: ["assistant", "Reading"] },
+    { factory: "toolCall", args: ["call-1", "view", '{"path":"a.txt"}'] },
+    { factory: "toolResult", args: ["call-1", "evidence"] },
+  ]);
+});
+
 test("maps completion options", () => {
   assert.deepEqual(
     toRequestOptions({
