@@ -1,5 +1,8 @@
 # Qwen2.5 0.5B OpenVINO GPU INT4 result
 
+> The original SDK 2.0.1 result is preserved below. The dated SDK 2.1 follow-up at the end is a
+> separate runtime-compatibility experiment, not a revision of that candidate's admission result.
+
 **Decision:** HOLD at the Foundry Session registration rung.
 
 ## Frozen inputs
@@ -49,3 +52,28 @@ plain completion, typed-tool, canary, or evidence gates using the released Found
 
 Reconsider when a released Foundry SDK exposes local model registration. Do not build against
 unreleased `main` or fabricate catalog metadata for route qualification.
+
+## 2026-10-21 - Released SDK 2.1 runtime follow-up
+
+The released JavaScript SDK 2.1.0 and matching native release successfully registered and loaded a
+hash-verified copy of the same 22-file, 384,287,877-byte artifact through the supported local catalog.
+OpenVINO execution-provider setup was explicitly authorized; no model was downloaded and the
+original conversion/model files were unchanged.
+
+| Stage | First runtime-probe result |
+|---|---|
+| Local-catalog registration and model load | PASS |
+| Plain completion | Exact `READY`, terminal `stop` |
+| Native typed tool | One `view` call with `path=canary.txt`, terminal `toolCalls` |
+| Real Copilot staged-file canary | FAIL: correct nonce returned with extra prose; 20.878 seconds |
+| Independently gated evidence example | Not run: the probe stopped at the canary failure |
+| Adapter/model/catalog cleanup | Completed |
+
+The canary returned the actual nonce inside a sentence rather than the required exact response.
+The independent gate rejected it despite a successful child exit and matching staged-input hashes.
+That result is preserved; the gate was not weakened and the attempt was not retried.
+
+**Decision remains HOLD.** The runtime registration blocker is resolved, but exact-format
+compliance is not cleared. The source candidate still pins SDK 2.0.1, and this smoke is not a
+semantic benchmark or route qualification. A new runtime admission contract and prospective
+qualification remain required before any route or marketplace availability change.

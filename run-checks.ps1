@@ -27,7 +27,9 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 & node --test (Join-Path $root "tools\foundry-session-qualification\qualification.test.mjs")
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-& node --test (Join-Path $root "tools\byom-intake\validate-candidate.test.mjs")
+& node --test `
+    (Join-Path $root "tools\byom-intake\validate-candidate.test.mjs") `
+    (Join-Path $root "tools\byom-intake\sdk21-runtime-probe.test.mjs")
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 & pwsh -NoProfile -File (Join-Path $root "tools\byom-intake\test-path-policy.ps1")
